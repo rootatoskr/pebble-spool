@@ -58,6 +58,39 @@ test('normalizeText keeps Cyrillic, Latin, Norwegian letters and punctuation', f
   });
 });
 
+test('normalizeText replaces Cyrillic letters outside the font ranges', function() {
+  // U+0492 and U+04D9 are Kazakh letters, U+0460 is historic.
+  assert.strictEqual(normalizeText('a\u0492b\u04d9c\u0460d'), 'a?b?c?d');
+});
+
+// Every character that normalizeText keeps needs a glyph, and a glyph that
+// normalizeText never lets through only makes the fonts bigger.
+test('normalizeText keeps exactly the characters of the font characterRegex', function() {
+  var media = require('../package.json').pebble.resources.media;
+  var fonts = media.filter(function(item) {
+    return item.type === 'font';
+  });
+  assert.strictEqual(fonts.length, 3);
+  fonts.forEach(function(font) {
+    assert.strictEqual(font.characterRegex, fonts[0].characterRegex);
+  });
+  var inFont = new RegExp('^' + fonts[0].characterRegex + '$');
+
+  var mismatches = [];
+  for (var code = 0x20; code <= 0xFFFF; code++) {
+    // Surrogates are not characters; pairs of them are covered by the emoji test.
+    if (code >= 0xD800 && code <= 0xDFFF) {
+      continue;
+    }
+    var sample = 'a' + String.fromCharCode(code) + 'a';
+    var kept = normalizeText(sample) === sample;
+    if (kept !== inFont.test(String.fromCharCode(code))) {
+      mismatches.push('U+' + code.toString(16).toUpperCase());
+    }
+  }
+  assert.deepStrictEqual(mismatches, []);
+});
+
 test('normalizeText gives an empty string for spaces and line breaks only', function() {
   assert.strictEqual(normalizeText(' \n \r\n\t \u00a0 '), '');
   assert.strictEqual(normalizeText(''), '');

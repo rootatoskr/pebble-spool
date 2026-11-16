@@ -5,8 +5,8 @@ var CHUNK_MAX_BYTES = 1000;
 // and a layer on the watch cannot be taller than 32767.
 var MAX_TEXT_BYTES = 8000;
 
-// Turns pasted text into what the watch can show. The character classes must not
-// allow anything outside ``characterRegex`` of the fonts in ``package.json``.
+// Turns pasted text into what the watch can show. The characters it keeps must be
+// exactly those of ``characterRegex`` of the fonts in ``package.json``; a test checks that.
 // The function is also copied into the settings page, so it must not use
 // anything defined outside of it.
 function normalizeText(text) {
@@ -26,7 +26,7 @@ function normalizeText(text) {
     // Characters outside the BMP (emoji) are a pair of UTF-16 units: one "?" for the pair.
     .replace(/[\ud800-\udbff][\udc00-\udfff]/g, '?')
     // Everything else that the font does not have.
-    .replace(/[^\n -~\u00a0-\u00ff\u0400-\u04ff\u2010-\u2027\u2030-\u203a\u20ac\u2116\u2212]/g, '?');
+    .replace(/[^\n -~\u00a0-\u00ff\u0400-\u045f\u0490\u0491\u2010-\u2027\u2030-\u203a\u20ac\u2116\u2212]/g, '?');
   // A text of spaces and line breaks only counts as no text.
   return /\S/.test(result) ? result : '';
 }
