@@ -26,8 +26,11 @@ static char *s_text;
 static bool s_show_notice;
 
 static int16_t prv_text_height(const char *text, GFont font, int16_t width, GTextAlignment alignment) {
-  return graphics_text_layout_get_content_size(text, font, GRect(0, 0, width, MAX_TEXT_HEIGHT),
-                                               GTextOverflowModeWordWrap, alignment).h;
+  int16_t height = graphics_text_layout_get_content_size(
+      text, font, GRect(0, 0, width, MAX_TEXT_HEIGHT), GTextOverflowModeWordWrap, alignment).h;
+  // The result can exceed the box by a part of a line. Margins and the notice are added
+  // to it later, so keep it bounded to stay clear of the 16-bit limit.
+  return height > MAX_TEXT_HEIGHT ? MAX_TEXT_HEIGHT : height;
 }
 
 static void prv_layout(void) {

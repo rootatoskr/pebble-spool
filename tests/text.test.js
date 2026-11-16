@@ -63,6 +63,26 @@ test('normalizeText gives an empty string for spaces and line breaks only', func
   assert.strictEqual(normalizeText(''), '');
 });
 
+test('normalizeText removes spaces and tabs before a line break', function() {
+  assert.strictEqual(normalizeText('a  \nb\t\nc \t \r\nd'), 'a\nb\nc\nd');
+  assert.strictEqual(normalizeText('a b  c'), 'a b  c');
+});
+
+test('normalizeText reduces three or more line breaks to two', function() {
+  assert.strictEqual(normalizeText('a\nb'), 'a\nb');
+  assert.strictEqual(normalizeText('a\n\nb'), 'a\n\nb');
+  assert.strictEqual(normalizeText('a\n\n\nb'), 'a\n\nb');
+  assert.strictEqual(normalizeText('a' + '\n'.repeat(500) + 'b'), 'a\n\nb');
+  assert.strictEqual(normalizeText('a\r\n\r\n\r\n\r\nb'), 'a\n\nb');
+  assert.strictEqual(normalizeText('a\u2028\u2029\n\rb'), 'a\n\nb');
+});
+
+test('normalizeText treats lines of spaces and invisible characters as empty', function() {
+  assert.strictEqual(normalizeText('a\n \n\t\n   \nb'), 'a\n\nb');
+  assert.strictEqual(normalizeText('a\n\u200b\n\u00ad\n\nb'), 'a\n\nb');
+  assert.strictEqual(normalizeText('a\n\u2003\n\u202f\nb'), 'a\n\nb');
+});
+
 test('utf8Length counts 1-, 2- and 3-byte characters', function() {
   assert.strictEqual(utf8Length(''), 0);
   assert.strictEqual(utf8Length('a'), 1);
@@ -119,6 +139,7 @@ test('normalizeText and utf8Length work when copied into an empty context', func
     '',
     ' \n ',
     'a\r\nb\tc\u2028d',
+    'a \n\t\n\n\n\nb  \nc',
     'Ґава \ud83d\ude00 за\u0301мок \u65e5 \u20ac',
     'æøå «»'
   ];

@@ -18,6 +18,11 @@ function normalizeText(text) {
     // Invisible characters: controls, combining marks (stress marks), soft hyphen,
     // zero-width characters, variation selectors.
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u0300-\u036f\u00ad\u200b-\u200f\u2060\ufeff\ufe00-\ufe0f]/g, '')
+    // Spaces at the end of a line, so that a line of spaces counts as empty.
+    .replace(/ +\n/g, '\n')
+    // Three or more line breaks in a row: at most one empty line stays. Hundreds of
+    // empty lines would make the text taller than a layer on the watch can be.
+    .replace(/\n{3,}/g, '\n\n')
     // Characters outside the BMP (emoji) are a pair of UTF-16 units: one "?" for the pair.
     .replace(/[\ud800-\udbff][\udc00-\udfff]/g, '?')
     // Everything else that the font does not have.
