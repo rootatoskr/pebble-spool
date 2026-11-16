@@ -11,19 +11,19 @@
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [
-      "aplite",
-      "basalt",
-      "chalk",
-      "diorite",
-      "emery",
-      "flint",
-      "gabbro"
+      "emery"
     ],
     "watchapp": {
       "watchface": false
     },
+    "capabilities": [
+      "configurable"
+    ],
     "messageKeys": [
-      "dummy"
+      "ChunkIndex",
+      "ChunkCount",
+      "TotalBytes",
+      "ChunkData"
     ],
     "resources": {
       "media": []
