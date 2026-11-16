@@ -14,18 +14,24 @@ static uint32_t s_transfer_id;
 static int32_t s_next_index;
 static uint32_t s_received_bytes;
 
-static void prv_send(uint32_t key_a, int32_t value_a, uint32_t key_b, int32_t value_b) {
+static void prv_send_result(uint32_t transfer_id, bool ok) {
   DictionaryIterator *iter;
   if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
     return;
   }
-  dict_write_int32(iter, key_a, value_a);
-  dict_write_int32(iter, key_b, value_b);
+  dict_write_uint32(iter, MESSAGE_KEY_ResultId, transfer_id);
+  dict_write_uint8(iter, MESSAGE_KEY_ResultOk, ok ? 1 : 0);
   app_message_outbox_send();
 }
 
-static void prv_send_result(uint32_t transfer_id, bool ok) {
-  prv_send(MESSAGE_KEY_ResultId, transfer_id, MESSAGE_KEY_ResultOk, ok);
+// The phone compares this id with its own copy and sends the text again if they differ.
+static void prv_send_active_id(void) {
+  DictionaryIterator *iter;
+  if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
+    return;
+  }
+  dict_write_uint32(iter, MESSAGE_KEY_ActiveId, storage_active_transfer_id());
+  app_message_outbox_send();
 }
 
 static void prv_fail(uint32_t transfer_id) {
@@ -95,15 +101,14 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context) 
   if (transfer_id_t) {
     prv_handle_chunk(iter, transfer_id_t->value->uint32);
   } else if (dict_find(iter, MESSAGE_KEY_Hello)) {
-    // The phone compares this id with its own copy and sends the text again if they differ.
-    prv_send(MESSAGE_KEY_ActiveId, storage_active_transfer_id(), MESSAGE_KEY_Hello, 1);
+    prv_send_active_id();
   }
 }
 
 void transfer_init(TransferTextChangedHandler handler) {
   s_text_changed_handler = handler;
   app_message_register_inbox_received(prv_inbox_received_handler);
-  // Sized for one chunk message; replies carry two integers.
+  // Sized for one chunk message; replies carry at most two integers.
   app_message_open(dict_calc_buffer_size(5, 4, 4, 4, 4, CHUNK_MAX_BYTES + 1),
                    dict_calc_buffer_size(2, 4, 4));
 }

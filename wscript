@@ -22,6 +22,11 @@ def configure(ctx):
     """
     ctx.load('pebble_sdk')
 
+    # The SDK's linker script puts code and data into one segment, which newer
+    # binutils report on every link. Nothing in the app can change that.
+    for platform in ctx.env.TARGET_PLATFORMS:
+        ctx.all_envs[platform].append_value('LINKFLAGS', ['-Wl,--no-warn-rwx-segments'])
+
 
 def build(ctx):
     ctx.load('pebble_sdk')

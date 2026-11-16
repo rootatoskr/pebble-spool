@@ -5,9 +5,9 @@ var MAX_ATTEMPTS = 3;
 var RETRY_DELAY_MS = 1000;
 
 // localStorage keys:
-//   text      - the text as the user saved it;
-//   textId    - id of that text, the watch stores it together with the text;
-//   syncState - 'pending', 'synced' or 'failed'.
+// - text: the text as the user saved it;
+// - textId: id of that text, the watch stores it together with the text;
+// - syncState: 'pending', 'synced' or 'failed'.
 
 // The transfer in progress. A newer transfer replaces it, and callbacks of the
 // replaced one stop when they see that they are no longer current.
