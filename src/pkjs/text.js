@@ -1,37 +1,49 @@
 // Keep in sync with ``CHUNK_MAX_BYTES`` in ``src/c/transfer.c``.
 var CHUNK_MAX_BYTES = 1000;
+// Keep in sync with ``STORAGE_MAX_TEXT_BYTES`` in ``src/c/storage.h``.
+// With the largest font, 8000 bytes of Latin text is about 26500 pixels high,
+// and a layer on the watch cannot be taller than 32767.
+var MAX_TEXT_BYTES = 8000;
 
+// Turns pasted text into what the watch can show. The character classes must not
+// allow anything outside ``characterRegex`` of the fonts in ``package.json``.
+// The function is also copied into the settings page, so it must not use
+// anything defined outside of it.
+function normalizeText(text) {
+  var result = text
+    // Windows, old Mac and Unicode line breaks.
+    .replace(/\r\n?|[\u2028\u2029]/g, '\n')
+    // Tabs and typographic spaces.
+    .replace(/[\t\u2000-\u200a\u202f]/g, ' ')
+    // Invisible characters: controls, combining marks (stress marks), soft hyphen,
+    // zero-width characters, variation selectors.
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u0300-\u036f\u00ad\u200b-\u200f\u2060\ufeff\ufe00-\ufe0f]/g, '')
+    // Characters outside the BMP (emoji) are a pair of UTF-16 units: one "?" for the pair.
+    .replace(/[\ud800-\udbff][\udc00-\udfff]/g, '?')
+    // Everything else that the font does not have.
+    .replace(/[^\n -~\u00a0-\u00ff\u0400-\u04ff\u2010-\u2027\u2030-\u203a\u20ac\u2116\u2212]/g, '?');
+  // A text of spaces and line breaks only counts as no text.
+  return /\S/.test(result) ? result : '';
+}
+
+// Byte length of normalized text, which has no characters outside the BMP.
 function utf8Length(text) {
   var bytes = 0;
   for (var i = 0; i < text.length; i++) {
     var code = text.charCodeAt(i);
-    if (code < 0x80) {
-      bytes += 1;
-    } else if (code < 0x800) {
-      bytes += 2;
-    } else if (code >= 0xD800 && code <= 0xDBFF) {
-      // A surrogate pair is one 4-byte character.
-      bytes += 4;
-      i++;
-    } else {
-      bytes += 3;
-    }
+    bytes += code < 0x80 ? 1 : (code < 0x800 ? 2 : 3);
   }
   return bytes;
 }
 
-// Splits text into chunks of at most CHUNK_MAX_BYTES without cutting a character.
-// An empty text gives one empty chunk, which clears the text on the watch.
+// Splits normalized text into chunks of at most CHUNK_MAX_BYTES without cutting
+// a character. An empty text gives one empty chunk, which clears the text on the watch.
 function splitIntoChunks(text) {
   var chunks = [];
   var current = '';
   var currentBytes = 0;
   for (var i = 0; i < text.length; i++) {
-    var code = text.charCodeAt(i);
     var character = text.charAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      character += text.charAt(++i);
-    }
     var bytes = utf8Length(character);
     if (currentBytes + bytes > CHUNK_MAX_BYTES) {
       chunks.push(current);
@@ -46,6 +58,8 @@ function splitIntoChunks(text) {
 }
 
 module.exports = {
+  MAX_TEXT_BYTES: MAX_TEXT_BYTES,
+  normalizeText: normalizeText,
   utf8Length: utf8Length,
   splitIntoChunks: splitIntoChunks
 };

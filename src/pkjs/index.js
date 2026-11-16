@@ -83,7 +83,7 @@ function sendChunk(transfer, index) {
 
 // Sends the saved text to the watch, replacing any transfer in progress.
 function startTransfer() {
-  var saved = localStorage.getItem('text') || '';
+  var saved = text.normalizeText(localStorage.getItem('text') || '');
   var transfer = {
     id: Number(localStorage.getItem('textId')),
     chunks: text.splitIntoChunks(saved),
