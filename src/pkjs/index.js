@@ -1,3 +1,4 @@
+var configPage = require('./config_page');
 var text = require('./text');
 
 var MAX_ATTEMPTS = 3;
@@ -7,23 +8,6 @@ var RETRY_DELAY_MS = 1000;
 //   text      - the text as the user saved it;
 //   textId    - id of that text, the watch stores it together with the text;
 //   syncState - 'pending', 'synced' or 'failed'.
-
-var CONFIG_HTML = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
-  '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-  '<title>pebble-spool</title></head><body>' +
-  '<textarea id="text" rows="15" style="width:100%;box-sizing:border-box"></textarea>' +
-  '<p>Bytes: <span id="count">0</span></p>' +
-  '<button id="save">Save</button>' +
-  '<script>' +
-  'var t=document.getElementById("text"),c=document.getElementById("count");' +
-  'function bytes(s){return unescape(encodeURIComponent(s)).length;}' +
-  't.addEventListener("input",function(){c.textContent=bytes(t.value);});' +
-  'document.getElementById("save").addEventListener("click",function(){' +
-  // The emulator appends "?return_to=..." to the URL; on the phone it is absent.
-  'var m=location.search.match(/[?&]return_to=(.*)$/);' +
-  'var r=m?decodeURIComponent(m[1]):"pebblejs://close#";' +
-  'location.href=r+encodeURIComponent(JSON.stringify({text:t.value}));});' +
-  '</script></body></html>';
 
 // The transfer in progress. A newer transfer replaces it, and callbacks of the
 // replaced one stop when they see that they are no longer current.
@@ -138,17 +122,17 @@ Pebble.addEventListener('appmessage', function(e) {
 });
 
 Pebble.addEventListener('showConfiguration', function() {
-  Pebble.openURL('data:text/html;charset=utf-8,' + encodeURIComponent(CONFIG_HTML));
+  var syncState = localStorage.getItem('syncState');
+  Pebble.openURL(configPage.buildUrl({
+    text: localStorage.getItem('text') || '',
+    maxBytes: text.MAX_TEXT_BYTES,
+    failed: syncState !== null && syncState !== 'synced'
+  }));
 });
 
 Pebble.addEventListener('webviewclosed', function(e) {
-  if (!e || !e.response) {
-    return;
+  var newText = configPage.parseResponse(e.response);
+  if (newText !== null) {
+    saveText(newText);
   }
-  // iOS decodes the response once, the emulator passes it still encoded.
-  var response = e.response;
-  if (response.charAt(0) !== '{') {
-    response = decodeURIComponent(response);
-  }
-  saveText(JSON.parse(response).text);
 });
