@@ -7,6 +7,7 @@
 #define MAX_TEXT_HEIGHT 30000
 #define FONT_COUNT 3
 #define DEFAULT_FONT_INDEX 1
+#define SCROLL_REPEAT_INTERVAL_MS 300
 
 static const uint32_t FONT_RESOURCES[FONT_COUNT] = {
   RESOURCE_ID_FONT_DEJAVU_18,
@@ -24,6 +25,12 @@ static GFont s_font;
 static int s_font_index;
 static char *s_text;
 static bool s_show_notice;
+// Height of one line of text in the current font.
+static int16_t s_line_height;
+// Where the first line of text starts in the scrolled content.
+static int16_t s_text_top;
+// Where the content is scrolled to, or is being animated to. Not positive.
+static int32_t s_scroll_offset;
 
 static int16_t prv_text_height(const char *text, GFont font, int16_t width, GTextAlignment alignment) {
   int16_t height = graphics_text_layout_get_content_size(
@@ -33,10 +40,30 @@ static int16_t prv_text_height(const char *text, GFont font, int16_t width, GTex
   return height > MAX_TEXT_HEIGHT ? MAX_TEXT_HEIGHT : height;
 }
 
+static int16_t prv_frame_height(void) {
+  return layer_get_frame(scroll_layer_get_layer(s_scroll_layer)).size.h;
+}
+
+// Scrolls to ``offset``, limited to the range between the start and the end of the content.
+static void prv_scroll_to(int32_t offset, bool animated) {
+  int32_t min_offset = prv_frame_height() - scroll_layer_get_content_size(s_scroll_layer).h;
+  if (offset < min_offset) {
+    offset = min_offset;
+  }
+  if (offset > 0) {
+    offset = 0;
+  }
+  s_scroll_offset = offset;
+  scroll_layer_set_content_offset(s_scroll_layer, GPoint(0, offset), animated);
+}
+
 static void prv_layout(void) {
   GRect frame = layer_get_frame(scroll_layer_get_layer(s_scroll_layer));
   int16_t width = frame.size.w - 2 * TEXT_MARGIN;
   int16_t y = 0;
+
+  s_line_height = prv_text_height("A\nA", s_font, width, GTextAlignmentLeft) -
+                  prv_text_height("A", s_font, width, GTextAlignmentLeft);
 
   Layer *notice_layer = text_layer_get_layer(s_notice_layer);
   layer_set_hidden(notice_layer, !s_show_notice);
@@ -55,8 +82,9 @@ static void prv_layout(void) {
     text_layer_set_font(s_text_layer, s_font);
     text_layer_set_text_alignment(s_text_layer, GTextAlignmentLeft);
     text_layer_set_text(s_text_layer, s_text);
-    layer_set_frame(text_layer, GRect(TEXT_MARGIN, y + TEXT_MARGIN, width, height));
-    scroll_layer_set_content_size(s_scroll_layer, GSize(frame.size.w, y + TEXT_MARGIN + height));
+    s_text_top = y + TEXT_MARGIN;
+    layer_set_frame(text_layer, GRect(TEXT_MARGIN, s_text_top, width, height));
+    scroll_layer_set_content_size(s_scroll_layer, GSize(frame.size.w, s_text_top + height));
   } else {
     const char *placeholder = "Paste text in settings on your phone";
     GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
@@ -69,9 +97,45 @@ static void prv_layout(void) {
   }
 }
 
+// Offset at which line ``line`` is the first one on screen. Line 0 is the very top,
+// including the margin and the notice above the text.
+static int32_t prv_offset_of_line(int32_t line) {
+  return line > 0 ? -(s_text_top + line * s_line_height) : 0;
+}
+
+// One press moves by the visible height minus one line, in whole lines, so that the
+// last full line stays on screen as context and the first line on screen is never cut.
+static void prv_scroll_by_page(ClickRecognizerRef recognizer, int direction) {
+  int32_t page_lines = prv_frame_height() / s_line_height - 1;
+  if (page_lines < 1) {
+    page_lines = 1;
+  }
+  // The offset is not on a line boundary after the end of the text was reached or the
+  // font was changed. Count from the boundary that makes the step shorter, not longer.
+  int32_t into_text = -s_scroll_offset - s_text_top;
+  int32_t line;
+  if (into_text <= 0) {
+    line = 0;
+  } else if (direction > 0) {
+    line = into_text / s_line_height;
+  } else {
+    line = (into_text + s_line_height - 1) / s_line_height;
+  }
+  line += direction * page_lines;
+  // While a button is held the next step comes before an animation would finish.
+  prv_scroll_to(prv_offset_of_line(line), !click_recognizer_is_repeating(recognizer));
+}
+
+static void prv_up_click_handler(ClickRecognizerRef recognizer, void *context) {
+  prv_scroll_by_page(recognizer, -1);
+}
+
+static void prv_down_click_handler(ClickRecognizerRef recognizer, void *context) {
+  prv_scroll_by_page(recognizer, 1);
+}
+
 static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
-  GRect frame = layer_get_frame(scroll_layer_get_layer(s_scroll_layer));
-  int32_t old_offset = scroll_layer_get_content_offset(s_scroll_layer).y;
+  int32_t old_offset = s_scroll_offset;
   int32_t old_height = scroll_layer_get_content_size(s_scroll_layer).h;
 
   GFont old_font = s_font;
@@ -81,20 +145,17 @@ static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *c
   prv_layout();
   fonts_unload_custom_font(old_font);
 
-  // Stay at the same relative position in the text, but never scroll past its end.
+  // Stay at the same relative position in the text.
   int32_t new_height = scroll_layer_get_content_size(s_scroll_layer).h;
-  int32_t new_offset = old_offset * new_height / old_height;
-  int32_t min_offset = frame.size.h - new_height;
-  if (new_offset < min_offset) {
-    new_offset = min_offset;
-  }
-  if (new_offset > 0) {
-    new_offset = 0;
-  }
-  scroll_layer_set_content_offset(s_scroll_layer, GPoint(0, new_offset), false);
+  prv_scroll_to(old_offset * new_height / old_height, false);
 }
 
+// Called after the scroll layer has set up its own Up and Down handlers, which this replaces.
 static void prv_click_config_provider(void *context) {
+  window_single_repeating_click_subscribe(BUTTON_ID_UP, SCROLL_REPEAT_INTERVAL_MS,
+                                          prv_up_click_handler);
+  window_single_repeating_click_subscribe(BUTTON_ID_DOWN, SCROLL_REPEAT_INTERVAL_MS,
+                                          prv_down_click_handler);
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, prv_select_long_click_handler, NULL);
 }
 
@@ -160,5 +221,5 @@ void text_window_reload(void) {
   s_text = storage_load_text();
   s_show_notice = storage_has_incomplete_transfer();
   prv_layout();
-  scroll_layer_set_content_offset(s_scroll_layer, GPointZero, false);
+  prv_scroll_to(0, false);
 }
