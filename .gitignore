@@ -69,7 +69,6 @@ npm-debug.log*
 # Docker
 .docker/
 
-AGENTS.md
 .cursor/
 
 # Project
