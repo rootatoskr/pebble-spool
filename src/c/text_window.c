@@ -28,6 +28,9 @@ static TextLayer *s_text_layer;
 static Layer *s_indicator_layer;
 static GFont s_font;
 static int s_font_index;
+// Which of the stored texts is shown.
+static int s_text_index;
+static uint32_t s_transfer_id;
 static char *s_text;
 static bool s_show_notice;
 // Height of one line of text in the current font.
@@ -69,12 +72,12 @@ static void prv_scroll_to(int32_t offset, bool animated) {
 // on exit, when the layers may already be destroyed, so it must not touch them.
 static void prv_save_position(void) {
   StoragePosition position = {
-    .transfer_id = storage_active_transfer_id(),
+    .transfer_id = s_transfer_id,
     .offset = s_scroll_offset,
     .content_height = s_content_height,
   };
   if (memcmp(&position, &s_stored_position, sizeof(position)) != 0) {
-    storage_write_position(&position);
+    storage_write_position(s_text_index, &position);
     s_stored_position = position;
   }
 }
@@ -282,13 +285,16 @@ void text_window_reload(void) {
   // Free the old text first so that two copies never have to fit in the heap.
   text_layer_set_text(s_text_layer, "");
   free(s_text);
-  s_text = storage_load_text();
-  s_show_notice = storage_has_incomplete_transfer();
+  s_text = storage_load_text(s_text_index);
+  StorageTextInfo info;
+  storage_get_info(s_text_index, &info);
+  s_transfer_id = info.transfer_id;
+  s_show_notice = info.incomplete;
   prv_layout();
 
   int32_t offset = 0;
-  if (storage_read_position(&s_stored_position) &&
-      s_stored_position.transfer_id == storage_active_transfer_id() &&
+  if (storage_read_position(s_text_index, &s_stored_position) &&
+      s_stored_position.transfer_id == s_transfer_id &&
       s_stored_position.content_height > 0) {
     // The same scaling as on a font change; ``prv_scroll_to`` keeps it inside the content.
     offset = s_stored_position.offset * s_content_height / s_stored_position.content_height;

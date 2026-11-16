@@ -24,13 +24,19 @@ static void prv_send_result(uint32_t transfer_id, bool ok) {
   app_message_outbox_send();
 }
 
+static uint32_t prv_stored_transfer_id(void) {
+  StorageTextInfo info;
+  storage_get_info(0, &info);
+  return info.transfer_id;
+}
+
 // The phone compares this id with its own copy and sends the text again if they differ.
 static void prv_send_active_id(void) {
   DictionaryIterator *iter;
   if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
     return;
   }
-  dict_write_uint32(iter, MESSAGE_KEY_ActiveId, storage_active_transfer_id());
+  dict_write_uint32(iter, MESSAGE_KEY_ActiveId, prv_stored_transfer_id());
   app_message_outbox_send();
 }
 
@@ -52,7 +58,7 @@ static void prv_handle_chunk(DictionaryIterator *iter, uint32_t transfer_id) {
 
   if (index == 0) {
     // The first chunk always starts over, which also covers a repeated Save.
-    if (total_bytes > STORAGE_MAX_TEXT_BYTES || !storage_begin(transfer_id)) {
+    if (total_bytes > STORAGE_MAX_TEXT_BYTES || !storage_begin(0, transfer_id, "")) {
       prv_fail(transfer_id);
       return;
     }
@@ -62,7 +68,7 @@ static void prv_handle_chunk(DictionaryIterator *iter, uint32_t transfer_id) {
     s_received_bytes = 0;
   } else if (!s_receiving || transfer_id != s_transfer_id) {
     // A repeated last chunk of a transfer that is already stored is not an error.
-    if (transfer_id == storage_active_transfer_id()) {
+    if (transfer_id == prv_stored_transfer_id()) {
       prv_send_result(transfer_id, true);
     } else {
       prv_fail(transfer_id);
