@@ -3,6 +3,10 @@
 #include "storage.h"
 
 #define TEXT_MARGIN 4
+// The progress indicator is a bar on the right edge with a gap between it and the text.
+#define INDICATOR_WIDTH 3
+#define INDICATOR_GAP 3
+#define INDICATOR_MIN_HEIGHT 12
 // Layer coordinates are 16-bit, so text taller than this is cut off.
 #define MAX_TEXT_HEIGHT 30000
 #define FONT_COUNT 3
@@ -21,6 +25,7 @@ static Window *s_window;
 static ScrollLayer *s_scroll_layer;
 static TextLayer *s_notice_layer;
 static TextLayer *s_text_layer;
+static Layer *s_indicator_layer;
 static GFont s_font;
 static int s_font_index;
 static char *s_text;
@@ -74,9 +79,34 @@ static void prv_save_position(void) {
   }
 }
 
+// Draws the part of the bar that corresponds to the visible part of the text.
+// Nothing is drawn when the whole text fits on the screen.
+static void prv_indicator_update_proc(Layer *layer, GContext *ctx) {
+  GRect bounds = layer_get_bounds(layer);
+  int32_t frame_height = bounds.size.h;
+  if (s_content_height <= frame_height) {
+    return;
+  }
+  int32_t height = frame_height * frame_height / s_content_height;
+  if (height < INDICATOR_MIN_HEIGHT) {
+    height = INDICATOR_MIN_HEIGHT;
+  }
+  // The actual offset, not ``s_scroll_offset``, so that the bar follows the animation.
+  int32_t scrolled = -scroll_layer_get_content_offset(s_scroll_layer).y;
+  int32_t y = scrolled * (frame_height - height) / (s_content_height - frame_height);
+  graphics_context_set_fill_color(ctx, GColorDarkGray);
+  graphics_fill_rect(ctx, GRect(0, y, bounds.size.w, height), 0, GCornerNone);
+}
+
+static void prv_content_offset_changed_handler(ScrollLayer *scroll_layer, void *context) {
+  layer_mark_dirty(s_indicator_layer);
+}
+
 static void prv_layout(void) {
   GRect frame = layer_get_frame(scroll_layer_get_layer(s_scroll_layer));
-  int16_t width = frame.size.w - 2 * TEXT_MARGIN;
+  // The space for the indicator is always reserved, so that the line breaks do not
+  // depend on whether the indicator is shown.
+  int16_t width = frame.size.w - TEXT_MARGIN - INDICATOR_GAP - INDICATOR_WIDTH;
   int16_t y = 0;
 
   s_line_height = prv_text_height("A\nA", s_font, width, GTextAlignmentLeft) -
@@ -114,6 +144,7 @@ static void prv_layout(void) {
     s_content_height = frame.size.h;
     scroll_layer_set_content_size(s_scroll_layer, frame.size);
   }
+  layer_mark_dirty(s_indicator_layer);
 }
 
 // Offset at which line ``line`` is the first one on screen. Line 0 is the very top,
@@ -191,6 +222,7 @@ static void prv_window_load(Window *window) {
   scroll_layer_set_shadow_hidden(s_scroll_layer, true);
   scroll_layer_set_callbacks(s_scroll_layer, (ScrollLayerCallbacks) {
     .click_config_provider = prv_click_config_provider,
+    .content_offset_changed_handler = prv_content_offset_changed_handler,
   });
   scroll_layer_set_click_config_onto_window(s_scroll_layer, window);
   layer_add_child(window_layer, scroll_layer_get_layer(s_scroll_layer));
@@ -207,6 +239,11 @@ static void prv_window_load(Window *window) {
   text_layer_set_overflow_mode(s_text_layer, GTextOverflowModeWordWrap);
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_text_layer));
 
+  s_indicator_layer = layer_create(GRect(bounds.size.w - INDICATOR_WIDTH, 0,
+                                         INDICATOR_WIDTH, bounds.size.h));
+  layer_set_update_proc(s_indicator_layer, prv_indicator_update_proc);
+  layer_add_child(window_layer, s_indicator_layer);
+
   text_window_reload();
 }
 
@@ -215,6 +252,7 @@ static void prv_window_disappear(Window *window) {
 }
 
 static void prv_window_unload(Window *window) {
+  layer_destroy(s_indicator_layer);
   text_layer_destroy(s_text_layer);
   text_layer_destroy(s_notice_layer);
   scroll_layer_destroy(s_scroll_layer);
