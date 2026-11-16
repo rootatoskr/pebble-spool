@@ -3,6 +3,7 @@
 #define KEY_SCHEMA_VERSION 1
 #define KEY_FONT_INDEX 2
 #define KEY_ACTIVE_SLOT 3
+#define KEY_POSITION 4
 
 #define SCHEMA_VERSION 1
 #define SLOT_NONE 0
@@ -173,4 +174,12 @@ int storage_read_font_index(int default_index) {
 
 void storage_write_font_index(int index) {
   persist_write_int(KEY_FONT_INDEX, index);
+}
+
+bool storage_read_position(StoragePosition *position) {
+  return persist_read_data(KEY_POSITION, position, sizeof(*position)) == (int)sizeof(*position);
+}
+
+void storage_write_position(const StoragePosition *position) {
+  persist_write_data(KEY_POSITION, position, sizeof(*position));
 }

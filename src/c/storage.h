@@ -27,3 +27,14 @@ bool storage_has_incomplete_transfer(void);
 
 int storage_read_font_index(int default_index);
 void storage_write_font_index(int index);
+
+// Where the user stopped reading. The offset is kept together with the content height
+// it belongs to, so that it can be scaled when the font size is different on return.
+typedef struct {
+  uint32_t transfer_id;
+  int32_t offset;
+  int32_t content_height;
+} StoragePosition;
+
+bool storage_read_position(StoragePosition *position);
+void storage_write_position(const StoragePosition *position);

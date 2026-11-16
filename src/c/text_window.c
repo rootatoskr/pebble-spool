@@ -29,8 +29,11 @@ static bool s_show_notice;
 static int16_t s_line_height;
 // Where the first line of text starts in the scrolled content.
 static int16_t s_text_top;
+static int16_t s_content_height;
 // Where the content is scrolled to, or is being animated to. Not positive.
 static int32_t s_scroll_offset;
+// The reading position as it is in storage, to skip writes that would change nothing.
+static StoragePosition s_stored_position;
 
 static int16_t prv_text_height(const char *text, GFont font, int16_t width, GTextAlignment alignment) {
   int16_t height = graphics_text_layout_get_content_size(
@@ -46,7 +49,7 @@ static int16_t prv_frame_height(void) {
 
 // Scrolls to ``offset``, limited to the range between the start and the end of the content.
 static void prv_scroll_to(int32_t offset, bool animated) {
-  int32_t min_offset = prv_frame_height() - scroll_layer_get_content_size(s_scroll_layer).h;
+  int32_t min_offset = prv_frame_height() - s_content_height;
   if (offset < min_offset) {
     offset = min_offset;
   }
@@ -55,6 +58,20 @@ static void prv_scroll_to(int32_t offset, bool animated) {
   }
   s_scroll_offset = offset;
   scroll_layer_set_content_offset(s_scroll_layer, GPoint(0, offset), animated);
+}
+
+// Remembers the place for the next launch. Called when the window goes away and again
+// on exit, when the layers may already be destroyed, so it must not touch them.
+static void prv_save_position(void) {
+  StoragePosition position = {
+    .transfer_id = storage_active_transfer_id(),
+    .offset = s_scroll_offset,
+    .content_height = s_content_height,
+  };
+  if (memcmp(&position, &s_stored_position, sizeof(position)) != 0) {
+    storage_write_position(&position);
+    s_stored_position = position;
+  }
 }
 
 static void prv_layout(void) {
@@ -84,7 +101,8 @@ static void prv_layout(void) {
     text_layer_set_text(s_text_layer, s_text);
     s_text_top = y + TEXT_MARGIN;
     layer_set_frame(text_layer, GRect(TEXT_MARGIN, s_text_top, width, height));
-    scroll_layer_set_content_size(s_scroll_layer, GSize(frame.size.w, s_text_top + height));
+    s_content_height = s_text_top + height;
+    scroll_layer_set_content_size(s_scroll_layer, GSize(frame.size.w, s_content_height));
   } else {
     const char *placeholder = "Paste text in settings on your phone";
     GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
@@ -93,6 +111,7 @@ static void prv_layout(void) {
     text_layer_set_text_alignment(s_text_layer, GTextAlignmentCenter);
     text_layer_set_text(s_text_layer, placeholder);
     layer_set_frame(text_layer, GRect(TEXT_MARGIN, y + (frame.size.h - y - height) / 2, width, height));
+    s_content_height = frame.size.h;
     scroll_layer_set_content_size(s_scroll_layer, frame.size);
   }
 }
@@ -136,7 +155,7 @@ static void prv_down_click_handler(ClickRecognizerRef recognizer, void *context)
 
 static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
   int32_t old_offset = s_scroll_offset;
-  int32_t old_height = scroll_layer_get_content_size(s_scroll_layer).h;
+  int32_t old_height = s_content_height;
 
   GFont old_font = s_font;
   s_font_index = (s_font_index + 1) % FONT_COUNT;
@@ -146,8 +165,7 @@ static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *c
   fonts_unload_custom_font(old_font);
 
   // Stay at the same relative position in the text.
-  int32_t new_height = scroll_layer_get_content_size(s_scroll_layer).h;
-  prv_scroll_to(old_offset * new_height / old_height, false);
+  prv_scroll_to(old_offset * s_content_height / old_height, false);
 }
 
 // Called after the scroll layer has set up its own Up and Down handlers, which this replaces.
@@ -192,6 +210,10 @@ static void prv_window_load(Window *window) {
   text_window_reload();
 }
 
+static void prv_window_disappear(Window *window) {
+  prv_save_position();
+}
+
 static void prv_window_unload(Window *window) {
   text_layer_destroy(s_text_layer);
   text_layer_destroy(s_notice_layer);
@@ -203,17 +225,21 @@ void text_window_push(void) {
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = prv_window_load,
+    .disappear = prv_window_disappear,
     .unload = prv_window_unload,
   });
   window_stack_push(s_window, true);
 }
 
 void text_window_destroy(void) {
+  prv_save_position();
   window_destroy(s_window);
   free(s_text);
   s_text = NULL;
 }
 
+// Shows the text that is in storage. Returns to the remembered place if it belongs to
+// this text; a new text has another transfer id and starts from the top.
 void text_window_reload(void) {
   // Free the old text first so that two copies never have to fit in the heap.
   text_layer_set_text(s_text_layer, "");
@@ -221,5 +247,15 @@ void text_window_reload(void) {
   s_text = storage_load_text();
   s_show_notice = storage_has_incomplete_transfer();
   prv_layout();
-  prv_scroll_to(0, false);
+
+  int32_t offset = 0;
+  if (storage_read_position(&s_stored_position) &&
+      s_stored_position.transfer_id == storage_active_transfer_id() &&
+      s_stored_position.content_height > 0) {
+    // The same scaling as on a font change; ``prv_scroll_to`` keeps it inside the content.
+    offset = s_stored_position.offset * s_content_height / s_stored_position.content_height;
+  } else {
+    s_stored_position = (StoragePosition) {0};
+  }
+  prv_scroll_to(offset, false);
 }
