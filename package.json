@@ -20,10 +20,15 @@
       "configurable"
     ],
     "messageKeys": [
+      "Hello",
+      "ActiveId",
+      "TransferId",
       "ChunkIndex",
       "ChunkCount",
       "TotalBytes",
-      "ChunkData"
+      "ChunkData",
+      "ResultId",
+      "ResultOk"
     ],
     "resources": {
       "media": [

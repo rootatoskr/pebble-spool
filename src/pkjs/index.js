@@ -1,4 +1,12 @@
-var CHUNK_BYTES = 1000;
+var text = require('./text');
+
+var MAX_ATTEMPTS = 3;
+var RETRY_DELAY_MS = 1000;
+
+// localStorage keys:
+//   text      - the text as the user saved it;
+//   textId    - id of that text, the watch stores it together with the text;
+//   syncState - 'pending', 'synced' or 'failed'.
 
 var CONFIG_HTML = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
   '<meta name="viewport" content="width=device-width,initial-scale=1">' +
@@ -17,67 +25,116 @@ var CONFIG_HTML = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
   'location.href=r+encodeURIComponent(JSON.stringify({text:t.value}));});' +
   '</script></body></html>';
 
-function utf8Length(codePoint) {
-  if (codePoint < 0x80) return 1;
-  if (codePoint < 0x800) return 2;
-  if (codePoint < 0x10000) return 3;
-  return 4;
-}
+// The transfer in progress. A newer transfer replaces it, and callbacks of the
+// replaced one stop when they see that they are no longer current.
+var currentTransfer = null;
 
-// Split by code points so that no UTF-8 sequence is cut in half.
-function splitText(text) {
-  var chunks = [];
-  var current = '';
-  var currentBytes = 0;
-  var total = 0;
-  for (var i = 0; i < text.length; i++) {
-    var ch = text.charAt(i);
-    var code = text.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF && i + 1 < text.length) {
-      ch += text.charAt(i + 1);
-      code = 0x10000;
-      i++;
+// Sends a message, repeating it after a failure. Gives up after MAX_ATTEMPTS.
+function sendReliably(message, isCancelled, onSuccess, onGiveUp, attempt) {
+  attempt = attempt || 1;
+  Pebble.sendAppMessage(message, function() {
+    if (!isCancelled()) {
+      onSuccess();
     }
-    var len = utf8Length(code);
-    if (currentBytes + len > CHUNK_BYTES) {
-      chunks.push(current);
-      current = '';
-      currentBytes = 0;
+  }, function() {
+    if (isCancelled()) {
+      return;
     }
-    current += ch;
-    currentBytes += len;
-    total += len;
-  }
-  chunks.push(current);
-  return { chunks: chunks, total: total };
-}
-
-function sendText(text) {
-  var parts = splitText(text);
-  var count = parts.chunks.length;
-  console.log('Sending ' + parts.total + ' bytes in ' + count + ' chunks');
-
-  function sendChunk(index) {
-    Pebble.sendAppMessage({
-      'ChunkIndex': index,
-      'ChunkCount': count,
-      'TotalBytes': parts.total,
-      'ChunkData': parts.chunks[index]
-    }, function() {
-      console.log('Chunk ' + (index + 1) + '/' + count + ' acked');
-      if (index + 1 < count) {
-        sendChunk(index + 1);
+    if (attempt >= MAX_ATTEMPTS) {
+      onGiveUp();
+      return;
+    }
+    setTimeout(function() {
+      if (!isCancelled()) {
+        sendReliably(message, isCancelled, onSuccess, onGiveUp, attempt + 1);
       }
-    }, function(e) {
-      console.log('Chunk ' + (index + 1) + '/' + count + ' failed: ' + JSON.stringify(e));
-    });
-  }
+    }, RETRY_DELAY_MS);
+  });
+}
 
-  sendChunk(0);
+function finishTransfer(transfer, ok) {
+  if (transfer !== currentTransfer) {
+    return;
+  }
+  currentTransfer = null;
+  localStorage.setItem('syncState', ok ? 'synced' : 'failed');
+  console.log('Transfer ' + transfer.id + (ok ? ' stored on the watch' : ' failed'));
+}
+
+function sendChunk(transfer, index) {
+  var isCancelled = function() {
+    return transfer !== currentTransfer;
+  };
+  sendReliably({
+    'TransferId': transfer.id,
+    'ChunkIndex': index,
+    'ChunkCount': transfer.chunks.length,
+    'TotalBytes': transfer.totalBytes,
+    'ChunkData': transfer.chunks[index]
+  }, isCancelled, function() {
+    // After the last chunk the watch confirms with ResultId/ResultOk.
+    if (index + 1 < transfer.chunks.length) {
+      sendChunk(transfer, index + 1);
+    }
+  }, function() {
+    finishTransfer(transfer, false);
+  });
+}
+
+// Sends the saved text to the watch, replacing any transfer in progress.
+function startTransfer() {
+  var saved = localStorage.getItem('text') || '';
+  var transfer = {
+    id: Number(localStorage.getItem('textId')),
+    chunks: text.splitIntoChunks(saved),
+    totalBytes: text.utf8Length(saved)
+  };
+  currentTransfer = transfer;
+  localStorage.setItem('syncState', 'pending');
+  console.log('Transfer ' + transfer.id + ': ' + transfer.totalBytes + ' bytes, ' +
+              transfer.chunks.length + ' chunks');
+  sendChunk(transfer, 0);
+}
+
+function saveText(newText) {
+  localStorage.setItem('text', newText);
+  // A positive 31-bit id, 0 means "no text" on the watch.
+  localStorage.setItem('textId', String(Math.floor(Math.random() * 0x7FFFFFFE) + 1));
+  startTransfer();
+}
+
+// The watch reported which text it has. Send ours again if it has a different one:
+// this restores the text after a broken transfer or a reinstall.
+function handleWatchState(activeId) {
+  var textId = localStorage.getItem('textId');
+  if (textId === null || currentTransfer) {
+    return;
+  }
+  if (Number(textId) === activeId) {
+    localStorage.setItem('syncState', 'synced');
+  } else {
+    startTransfer();
+  }
 }
 
 Pebble.addEventListener('ready', function() {
-  console.log('PebbleKit JS ready');
+  var never = function() {
+    return false;
+  };
+  sendReliably({'Hello': 1}, never, function() {}, function() {
+    console.log('Watch did not answer');
+  });
+});
+
+Pebble.addEventListener('appmessage', function(e) {
+  var payload = e.payload;
+  if (payload.ResultId !== undefined) {
+    if (currentTransfer && payload.ResultId === currentTransfer.id) {
+      finishTransfer(currentTransfer, payload.ResultOk === 1);
+    }
+  } else if (payload.ActiveId !== undefined) {
+    handleWatchState(payload.ActiveId);
+  }
 });
 
 Pebble.addEventListener('showConfiguration', function() {
@@ -86,7 +143,6 @@ Pebble.addEventListener('showConfiguration', function() {
 
 Pebble.addEventListener('webviewclosed', function(e) {
   if (!e || !e.response) {
-    console.log('Config closed without data');
     return;
   }
   // iOS decodes the response once, the emulator passes it still encoded.
@@ -94,5 +150,5 @@ Pebble.addEventListener('webviewclosed', function(e) {
   if (response.charAt(0) !== '{') {
     response = decodeURIComponent(response);
   }
-  sendText(JSON.parse(response).text);
+  saveText(JSON.parse(response).text);
 });
