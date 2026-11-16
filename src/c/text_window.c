@@ -279,6 +279,12 @@ void text_window_destroy(void) {
   s_text = NULL;
 }
 
+void text_window_handle_text_changed(int text) {
+  if (text == s_text_index) {
+    text_window_reload();
+  }
+}
+
 // Shows the text that is in storage. Returns to the remembered place if it belongs to
 // this text; a new text has another transfer id and starts from the top.
 void text_window_reload(void) {

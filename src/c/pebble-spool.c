@@ -7,7 +7,7 @@
 int main(void) {
   storage_init();
   text_window_push();
-  transfer_init(text_window_reload);
+  transfer_init(text_window_handle_text_changed);
   app_event_loop();
   text_window_destroy();
 }

@@ -1,0 +1,158 @@
+var assert = require('node:assert');
+var test = require('node:test');
+
+var sync = require('../src/pkjs/sync');
+var text = require('../src/pkjs/text');
+
+// A stand-in for localStorage.
+function fakeStorage(initial) {
+  var values = Object.assign({}, initial);
+  return {
+    values: values,
+    getItem: function(key) {
+      return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null;
+    },
+    setItem: function(key, value) {
+      values[key] = String(value);
+    },
+    removeItem: function(key) {
+      delete values[key];
+    }
+  };
+}
+
+test('storageKey appends the slot number', function() {
+  assert.strictEqual(sync.storageKey('text', 0), 'text0');
+  assert.strictEqual(sync.storageKey('syncState', 4), 'syncState4');
+});
+
+test('migrateStorage turns the single text of version 1.1 into slot 0', function() {
+  var storage = fakeStorage({text: 'Привіт', textId: '123', syncState: 'synced'});
+  sync.migrateStorage(storage);
+  assert.deepStrictEqual(storage.values, {
+    text0: 'Привіт',
+    name0: '',
+    textId0: '123',
+    syncState0: 'synced'
+  });
+});
+
+test('migrateStorage does nothing without old keys', function() {
+  var storage = fakeStorage({text1: 'a', textId1: '5', syncState1: 'synced', name1: 'n'});
+  var before = Object.assign({}, storage.values);
+  sync.migrateStorage(storage);
+  assert.deepStrictEqual(storage.values, before);
+});
+
+test('migrateStorage does not overwrite slot 0 when run again', function() {
+  var storage = fakeStorage({
+    text: 'old', textId: '1', syncState: 'failed',
+    text0: 'new', name0: 'n', textId0: '2', syncState0: 'synced'
+  });
+  sync.migrateStorage(storage);
+  assert.deepStrictEqual(storage.values, {
+    text0: 'new', name0: 'n', textId0: '2', syncState0: 'synced'
+  });
+});
+
+test('localIds gives a number for saved slots and null for the rest', function() {
+  var storage = fakeStorage({textId0: '10', textId3: '40'});
+  assert.deepStrictEqual(sync.localIds(storage), [10, null, null, 40, null]);
+});
+
+test('watchIdsFromPayload reads the five ids', function() {
+  var payload = {SlotId0: 1, SlotId1: 0, SlotId2: 3, SlotId3: 0, SlotId4: 5};
+  assert.deepStrictEqual(sync.watchIdsFromPayload(payload), [1, 0, 3, 0, 5]);
+});
+
+test('watchIdsFromPayload gives null for other messages', function() {
+  assert.strictEqual(sync.watchIdsFromPayload({ResultId: 7, ResultOk: 1}), null);
+  assert.strictEqual(sync.watchIdsFromPayload({SlotId0: 1, SlotId1: 2}), null);
+});
+
+test('slotsToResend picks only slots where the ids differ', function() {
+  assert.deepStrictEqual(sync.slotsToResend([1, 2, 3, 4, 5], [1, 2, 3, 4, 5]), []);
+  assert.deepStrictEqual(sync.slotsToResend([1, 2, 3, 4, 5], [1, 0, 3, 9, 5]), [1, 3]);
+  // After a reinstall the watch has nothing.
+  assert.deepStrictEqual(sync.slotsToResend([1, null, 3, null, null], [0, 0, 0, 0, 0]), [0, 2]);
+});
+
+test('slotsToResend leaves slots that were never saved on this phone', function() {
+  assert.deepStrictEqual(sync.slotsToResend([null, null, null, null, null], [7, 0, 8, 0, 0]), []);
+});
+
+test('queueAdd keeps the order and never holds a slot twice', function() {
+  var queue = [];
+  sync.queueAdd(queue, 1, false);
+  sync.queueAdd(queue, 3, false);
+  sync.queueAdd(queue, 1, false);
+  assert.deepStrictEqual(queue, [1, 3]);
+});
+
+test('queueAdd puts a saved slot before the resends', function() {
+  var queue = [1, 3, 4];
+  sync.queueAdd(queue, 3, true);
+  assert.deepStrictEqual(queue, [3, 1, 4]);
+  sync.queueAdd(queue, 0, true);
+  assert.deepStrictEqual(queue, [0, 3, 1, 4]);
+});
+
+test('the queue sends resends one by one in slot order', function() {
+  var queue = [];
+  sync.slotsToResend([1, 2, 3, null, 5], [0, 2, 0, 0, 0]).forEach(function(slot) {
+    sync.queueAdd(queue, slot, false);
+  });
+  assert.deepStrictEqual(queue, [0, 2, 4]);
+  assert.strictEqual(queue.shift(), 0);
+  // A save for slot 4 arrives while slot 0 is being sent: it goes next.
+  sync.queueAdd(queue, 4, true);
+  assert.deepStrictEqual(queue, [4, 2]);
+});
+
+test('buildTransfer normalizes the text and splits it into chunks', function() {
+  var saved = 'Перший рядок\r\n\r\n\r\n\r\nДругий ' + 'ї'.repeat(600);
+  var storage = fakeStorage({text2: saved, name2: '', textId2: '777'});
+  var transfer = sync.buildTransfer(storage, 2);
+  var normalized = text.normalizeText(saved);
+  assert.strictEqual(transfer.slot, 2);
+  assert.strictEqual(transfer.id, 777);
+  assert.strictEqual(transfer.name, 'Перший рядок');
+  assert.strictEqual(transfer.chunks.join(''), normalized);
+  assert.strictEqual(transfer.totalBytes, Buffer.byteLength(normalized, 'utf8'));
+  assert.strictEqual(transfer.chunks.length, 2);
+});
+
+test('buildTransfer uses the typed name when there is one', function() {
+  var storage = fakeStorage({text0: 'Текст', name0: '  Моя назва ', textId0: '1'});
+  assert.strictEqual(sync.buildTransfer(storage, 0).name, 'Моя назва');
+});
+
+test('buildTransfer of an emptied slot is one empty chunk', function() {
+  var storage = fakeStorage({text1: '', name1: '', textId1: '9'});
+  var transfer = sync.buildTransfer(storage, 1);
+  assert.deepStrictEqual(transfer.chunks, ['']);
+  assert.strictEqual(transfer.totalBytes, 0);
+  assert.strictEqual(transfer.name, '');
+});
+
+test('chunkMessage carries the slot in every chunk and the name in the first', function() {
+  var transfer = {slot: 3, id: 42, name: 'Назва', chunks: ['aa', 'bb', 'c'], totalBytes: 5};
+  assert.deepStrictEqual(sync.chunkMessage(transfer, 0), {
+    TransferId: 42, Slot: 3, ChunkIndex: 0, ChunkCount: 3, TotalBytes: 5, ChunkData: 'aa',
+    Name: 'Назва'
+  });
+  assert.deepStrictEqual(sync.chunkMessage(transfer, 2), {
+    TransferId: 42, Slot: 3, ChunkIndex: 2, ChunkCount: 3, TotalBytes: 5, ChunkData: 'c'
+  });
+});
+
+test('chunkMessage uses only keys declared in package.json', function() {
+  var declared = require('../package.json').pebble.messageKeys;
+  var transfer = {slot: 0, id: 1, name: 'n', chunks: ['a'], totalBytes: 1};
+  Object.keys(sync.chunkMessage(transfer, 0)).forEach(function(key) {
+    assert.ok(declared.indexOf(key) >= 0, key);
+  });
+  for (var slot = 0; slot < sync.SLOT_COUNT; slot++) {
+    assert.ok(declared.indexOf('SlotId' + slot) >= 0);
+  }
+});

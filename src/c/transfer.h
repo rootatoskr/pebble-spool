@@ -2,7 +2,8 @@
 
 #include <pebble.h>
 
-typedef void (*TransferTextChangedHandler)(void);
+// Called with the index of the text after a new version of it has been stored.
+typedef void (*TransferTextChangedHandler)(int text);
 
-// Opens AppMessage. ``handler`` is called after a new text has been stored.
+// Opens AppMessage.
 void transfer_init(TransferTextChangedHandler handler);

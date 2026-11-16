@@ -4,6 +4,8 @@ var CHUNK_MAX_BYTES = 1000;
 // With the largest font, 8000 bytes of Latin text is about 26500 pixels high,
 // and a layer on the watch cannot be taller than 32767.
 var MAX_TEXT_BYTES = 8000;
+// Keep in sync with ``STORAGE_NAME_MAX_BYTES`` in ``src/c/storage.h``.
+var NAME_MAX_BYTES = 32;
 
 // Turns pasted text into what the watch can show. The characters it keeps must be
 // exactly those of ``characterRegex`` of the fonts in ``package.json``; a test checks that.
@@ -29,6 +31,27 @@ function normalizeText(text) {
     .replace(/[^\n -~\u00a0-\u00ff\u0400-\u045f\u0490\u0491\u2010-\u2027\u2030-\u203a\u20ac\u2116\u2212]/g, '?');
   // A text of spaces and line breaks only counts as no text.
   return /\S/.test(result) ? result : '';
+}
+
+// The name of a text as the watch stores it: the name the user typed or, without one,
+// the first line of the text. Line breaks become spaces and the result is cut to
+// NAME_MAX_BYTES without cutting a character. ``text`` must be normalized already.
+function makeName(name, text) {
+  var source = normalizeText(name).replace(/\n/g, ' ').replace(/^ +| +$/g, '');
+  if (!source) {
+    source = text.replace(/^[ \n]+/, '').split('\n')[0];
+  }
+  var result = '';
+  var bytes = 0;
+  for (var i = 0; i < source.length; i++) {
+    var character = source.charAt(i);
+    bytes += utf8Length(character);
+    if (bytes > NAME_MAX_BYTES) {
+      break;
+    }
+    result += character;
+  }
+  return result.replace(/ +$/, '');
 }
 
 // Byte length of normalized text, which has no characters outside the BMP.
@@ -65,7 +88,9 @@ function splitIntoChunks(text) {
 module.exports = {
   CHUNK_MAX_BYTES: CHUNK_MAX_BYTES,
   MAX_TEXT_BYTES: MAX_TEXT_BYTES,
+  NAME_MAX_BYTES: NAME_MAX_BYTES,
   normalizeText: normalizeText,
+  makeName: makeName,
   utf8Length: utf8Length,
   splitIntoChunks: splitIntoChunks
 };

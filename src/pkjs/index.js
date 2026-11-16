@@ -1,17 +1,19 @@
 var configPage = require('./config_page');
+var sync = require('./sync');
 var text = require('./text');
 
 var MAX_ATTEMPTS = 3;
 var RETRY_DELAY_MS = 1000;
 
-// localStorage keys:
-// - text: the text as the user saved it;
-// - textId: id of that text, the watch stores it together with the text;
-// - syncState: 'pending', 'synced' or 'failed'.
-
-// The transfer in progress. A newer transfer replaces it, and callbacks of the
-// replaced one stop when they see that they are no longer current.
+// The transfer in progress. Only one runs at a time. A newer transfer replaces it, and
+// callbacks of the replaced one stop when they see that they are no longer current.
 var currentTransfer = null;
+// Slots that wait for their turn to be sent.
+var queue = [];
+
+function setSyncState(slot, state) {
+  localStorage.setItem(sync.storageKey('syncState', slot), state);
+}
 
 // Sends a message, repeating it after a failure. Gives up after MAX_ATTEMPTS.
 function sendReliably(message, isCancelled, onSuccess, onGiveUp, attempt) {
@@ -41,21 +43,17 @@ function finishTransfer(transfer, ok) {
     return;
   }
   currentTransfer = null;
-  localStorage.setItem('syncState', ok ? 'synced' : 'failed');
-  console.log('Transfer ' + transfer.id + (ok ? ' stored on the watch' : ' failed'));
+  setSyncState(transfer.slot, ok ? 'synced' : 'failed');
+  console.log('Slot ' + transfer.slot + ', transfer ' + transfer.id +
+              (ok ? ' stored on the watch' : ' failed'));
+  startNextTransfer();
 }
 
 function sendChunk(transfer, index) {
   var isCancelled = function() {
     return transfer !== currentTransfer;
   };
-  sendReliably({
-    'TransferId': transfer.id,
-    'ChunkIndex': index,
-    'ChunkCount': transfer.chunks.length,
-    'TotalBytes': transfer.totalBytes,
-    'ChunkData': transfer.chunks[index]
-  }, isCancelled, function() {
+  sendReliably(sync.chunkMessage(transfer, index), isCancelled, function() {
     // After the last chunk the watch confirms with ResultId/ResultOk.
     if (index + 1 < transfer.chunks.length) {
       sendChunk(transfer, index + 1);
@@ -65,43 +63,60 @@ function sendChunk(transfer, index) {
   });
 }
 
-// Sends the saved text to the watch, replacing any transfer in progress.
-function startTransfer() {
-  var saved = text.normalizeText(localStorage.getItem('text') || '');
-  var transfer = {
-    id: Number(localStorage.getItem('textId')),
-    chunks: text.splitIntoChunks(saved),
-    totalBytes: text.utf8Length(saved)
-  };
+// Sends the next waiting slot, unless a transfer is still running.
+function startNextTransfer() {
+  if (currentTransfer || queue.length === 0) {
+    return;
+  }
+  var transfer = sync.buildTransfer(localStorage, queue.shift());
   currentTransfer = transfer;
-  localStorage.setItem('syncState', 'pending');
-  console.log('Transfer ' + transfer.id + ': ' + transfer.totalBytes + ' bytes, ' +
-              transfer.chunks.length + ' chunks');
+  setSyncState(transfer.slot, 'pending');
+  console.log('Slot ' + transfer.slot + ', transfer ' + transfer.id + ': ' +
+              transfer.totalBytes + ' bytes, ' + transfer.chunks.length + ' chunks');
   sendChunk(transfer, 0);
 }
 
-function saveText(newText) {
-  localStorage.setItem('text', newText);
-  // A positive 31-bit id, 0 means "no text" on the watch.
-  localStorage.setItem('textId', String(Math.floor(Math.random() * 0x7FFFFFFE) + 1));
-  startTransfer();
+// Saves a new version of a slot and sends it before anything else. An empty text
+// clears the slot on the watch.
+function saveText(slot, name, newText) {
+  localStorage.setItem(sync.storageKey('text', slot), newText);
+  localStorage.setItem(sync.storageKey('name', slot), name);
+  // A positive 31-bit id, 0 means "nothing stored" on the watch.
+  localStorage.setItem(sync.storageKey('textId', slot),
+                       String(Math.floor(Math.random() * 0x7FFFFFFE) + 1));
+  setSyncState(slot, 'pending');
+  if (currentTransfer) {
+    // The running transfer is abandoned. If it belongs to another slot, that slot
+    // gets its turn again right after this one.
+    if (currentTransfer.slot !== slot) {
+      sync.queueAdd(queue, currentTransfer.slot, true);
+    }
+    currentTransfer = null;
+  }
+  sync.queueAdd(queue, slot, true);
+  startNextTransfer();
 }
 
-// The watch reported which text it has. Send ours again if it has a different one:
-// this restores the text after a broken transfer or a reinstall.
-function handleWatchState(activeId) {
-  var textId = localStorage.getItem('textId');
-  if (textId === null || currentTransfer) {
-    return;
+// The watch reported which versions it has. Send ours again where it has a different
+// one: this restores the texts after a broken transfer or a reinstall.
+function handleWatchState(watchIds) {
+  var phoneIds = sync.localIds(localStorage);
+  var resend = sync.slotsToResend(phoneIds, watchIds);
+  for (var slot = 0; slot < sync.SLOT_COUNT; slot++) {
+    var busy = currentTransfer && currentTransfer.slot === slot;
+    if (resend.indexOf(slot) >= 0) {
+      if (!busy) {
+        sync.queueAdd(queue, slot, false);
+      }
+    } else if (phoneIds[slot] !== null && !busy && queue.indexOf(slot) < 0) {
+      setSyncState(slot, 'synced');
+    }
   }
-  if (Number(textId) === activeId) {
-    localStorage.setItem('syncState', 'synced');
-  } else {
-    startTransfer();
-  }
+  startNextTransfer();
 }
 
 Pebble.addEventListener('ready', function() {
+  sync.migrateStorage(localStorage);
   var never = function() {
     return false;
   };
@@ -116,15 +131,18 @@ Pebble.addEventListener('appmessage', function(e) {
     if (currentTransfer && payload.ResultId === currentTransfer.id) {
       finishTransfer(currentTransfer, payload.ResultOk === 1);
     }
-  } else if (payload.ActiveId !== undefined) {
-    handleWatchState(payload.ActiveId);
+    return;
+  }
+  var watchIds = sync.watchIdsFromPayload(payload);
+  if (watchIds) {
+    handleWatchState(watchIds);
   }
 });
 
 Pebble.addEventListener('showConfiguration', function() {
-  var syncState = localStorage.getItem('syncState');
+  var syncState = localStorage.getItem(sync.storageKey('syncState', 0));
   Pebble.openURL(configPage.buildUrl({
-    text: localStorage.getItem('text') || '',
+    text: localStorage.getItem(sync.storageKey('text', 0)) || '',
     maxBytes: text.MAX_TEXT_BYTES,
     failed: syncState !== null && syncState !== 'synced'
   }));
@@ -133,6 +151,6 @@ Pebble.addEventListener('showConfiguration', function() {
 Pebble.addEventListener('webviewclosed', function(e) {
   var newText = configPage.parseResponse(e.response);
   if (newText !== null) {
-    saveText(newText);
+    saveText(0, '', newText);
   }
 });

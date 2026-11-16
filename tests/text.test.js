@@ -116,6 +116,41 @@ test('normalizeText treats lines of spaces and invisible characters as empty', f
   assert.strictEqual(normalizeText('a\n\u2003\n\u202f\nb'), 'a\n\nb');
 });
 
+test('makeName uses the typed name without spaces around it', function() {
+  assert.strictEqual(text.makeName('  Мій текст  ', 'Перший рядок\nдругий'), 'Мій текст');
+});
+
+test('makeName replaces line breaks in the name with spaces', function() {
+  assert.strictEqual(text.makeName('Один\r\nДва\nТри', 'x'), 'Один Два Три');
+});
+
+test('makeName normalizes the name like the text', function() {
+  assert.strictEqual(text.makeName('Назва\t' + String.fromCharCode(0xD83D, 0xDE00), 'x'), 'Назва ?');
+});
+
+test('makeName falls back to the first non-empty line of the text', function() {
+  assert.strictEqual(text.makeName('', 'Перший рядок\nдругий'), 'Перший рядок');
+  assert.strictEqual(text.makeName('   ', 'Перший рядок'), 'Перший рядок');
+  assert.strictEqual(text.makeName('', '\n  Після порожнього\nдалі'), 'Після порожнього');
+  assert.strictEqual(text.makeName('', ''), '');
+});
+
+test('makeName cuts to the byte limit without cutting a character', function() {
+  assert.strictEqual(text.NAME_MAX_BYTES, 32);
+  // 20 two-byte letters are 40 bytes: 16 of them fit.
+  assert.strictEqual(text.makeName('ї'.repeat(20), ''), 'ї'.repeat(16));
+  // With one ASCII letter in front only 15 fit, 31 bytes in total.
+  var name = text.makeName('a' + 'ї'.repeat(20), '');
+  assert.strictEqual(name, 'a' + 'ї'.repeat(15));
+  assert.strictEqual(Buffer.byteLength(name, 'utf8'), 31);
+  assert.strictEqual(text.makeName('a'.repeat(32), ''), 'a'.repeat(32));
+  assert.strictEqual(text.makeName('a'.repeat(33), ''), 'a'.repeat(32));
+});
+
+test('makeName leaves no space at the cut', function() {
+  assert.strictEqual(text.makeName('a'.repeat(31) + ' bcd', ''), 'a'.repeat(31));
+});
+
 test('utf8Length counts 1-, 2- and 3-byte characters', function() {
   assert.strictEqual(utf8Length(''), 0);
   assert.strictEqual(utf8Length('a'), 1);
