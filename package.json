@@ -26,7 +26,29 @@
       "ChunkData"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {
+          "type": "font",
+          "name": "FONT_DEJAVU_18",
+          "file": "DejaVuSans.ttf",
+          "characterRegex": "[ -~\u00a0-\u00ff\u0400-\u04ff\u2010-\u2027\u2030-\u203a\u20ac\u2116\u2212]",
+          "extended": true
+        },
+        {
+          "type": "font",
+          "name": "FONT_DEJAVU_24",
+          "file": "DejaVuSans.ttf",
+          "characterRegex": "[ -~\u00a0-\u00ff\u0400-\u04ff\u2010-\u2027\u2030-\u203a\u20ac\u2116\u2212]",
+          "extended": true
+        },
+        {
+          "type": "font",
+          "name": "FONT_DEJAVU_32",
+          "file": "DejaVuSans.ttf",
+          "characterRegex": "[ -~\u00a0-\u00ff\u0400-\u04ff\u2010-\u2027\u2030-\u203a\u20ac\u2116\u2212]",
+          "extended": true
+        }
+      ]
     }
   }
 }

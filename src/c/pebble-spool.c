@@ -1,16 +1,10 @@
 #include <pebble.h>
 
-static Window *s_window;
-static TextLayer *s_text_layer;
+#include "text_window.h"
 
 static char *s_text;
 static uint32_t s_text_size;
 static uint32_t s_text_len;
-static char s_status[64];
-
-static void prv_show(const char *text) {
-  text_layer_set_text(s_text_layer, text);
-}
 
 static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   Tuple *index_t = dict_find(iter, MESSAGE_KEY_ChunkIndex);
@@ -27,13 +21,11 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   uint32_t total = (uint32_t)total_t->value->int32;
 
   if (index == 0) {
-    free(s_text);
     s_text_size = total + 1;
     s_text = malloc(s_text_size);
     s_text_len = 0;
     if (!s_text) {
       APP_LOG(APP_LOG_LEVEL_ERROR, "malloc(%lu) failed", (unsigned long)s_text_size);
-      prv_show("Out of memory");
       return;
     }
     s_text[0] = '\0';
@@ -55,10 +47,8 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
           (long)(index + 1), (long)count, (unsigned long)s_text_len, (unsigned long)total);
 
   if (index == count - 1) {
-    snprintf(s_status, sizeof(s_status), "%lu/%lu bytes, %ld chunks",
-             (unsigned long)s_text_len, (unsigned long)total, (long)count);
-    APP_LOG(APP_LOG_LEVEL_INFO, "Done: %s", s_status);
-    prv_show(s_text);
+    text_window_set_text(s_text);
+    s_text = NULL;
   }
 }
 
@@ -66,42 +56,8 @@ static void prv_inbox_dropped(AppMessageResult reason, void *context) {
   APP_LOG(APP_LOG_LEVEL_ERROR, "Inbox dropped: %d", (int)reason);
 }
 
-static void prv_select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  // Toggle between the received text and the byte count.
-  if (!s_text) {
-    return;
-  }
-  const char *current = text_layer_get_text(s_text_layer);
-  prv_show(current == s_status ? s_text : s_status);
-}
-
-static void prv_click_config_provider(void *context) {
-  window_single_click_subscribe(BUTTON_ID_SELECT, prv_select_click_handler);
-}
-
-static void prv_window_load(Window *window) {
-  Layer *window_layer = window_get_root_layer(window);
-  GRect bounds = layer_get_bounds(window_layer);
-
-  s_text_layer = text_layer_create(bounds);
-  text_layer_set_font(s_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
-  text_layer_set_overflow_mode(s_text_layer, GTextOverflowModeWordWrap);
-  prv_show("Paste text in settings on your phone");
-  layer_add_child(window_layer, text_layer_get_layer(s_text_layer));
-}
-
-static void prv_window_unload(Window *window) {
-  text_layer_destroy(s_text_layer);
-}
-
 static void prv_init(void) {
-  s_window = window_create();
-  window_set_click_config_provider(s_window, prv_click_config_provider);
-  window_set_window_handlers(s_window, (WindowHandlers) {
-    .load = prv_window_load,
-    .unload = prv_window_unload,
-  });
-  window_stack_push(s_window, true);
+  text_window_push();
 
   app_message_register_inbox_received(prv_inbox_received);
   app_message_register_inbox_dropped(prv_inbox_dropped);
@@ -111,7 +67,7 @@ static void prv_init(void) {
 }
 
 static void prv_deinit(void) {
-  window_destroy(s_window);
+  text_window_destroy();
   free(s_text);
 }
 
