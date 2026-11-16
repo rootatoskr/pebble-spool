@@ -23,6 +23,14 @@ pebble emu-app-config --emulator emery
 After changing fonts or `characterRegex` in `package.json` run `pebble clean` first:
 font resources are not rebuilt otherwise.
 
+## Tests
+
+The text helpers of the phone side have tests that need only Node.js:
+
+```sh
+node --test tests/
+```
+
 ## Project layout
 
 - `src/c/pebble-spool.c` - entry point
@@ -33,6 +41,7 @@ font resources are not rebuilt otherwise.
 - `src/pkjs/text.js` - text normalization and splitting into chunks
 - `src/pkjs/config_page.js` - the settings page
 - `resources/` - DejaVu Sans and its license
+- `tests/` - tests for `src/pkjs/text.js`
 
 ## Notes
 

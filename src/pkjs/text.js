@@ -58,6 +58,7 @@ function splitIntoChunks(text) {
 }
 
 module.exports = {
+  CHUNK_MAX_BYTES: CHUNK_MAX_BYTES,
   MAX_TEXT_BYTES: MAX_TEXT_BYTES,
   normalizeText: normalizeText,
   utf8Length: utf8Length,
