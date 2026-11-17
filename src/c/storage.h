@@ -51,6 +51,16 @@ typedef struct {
 bool storage_read_position(int text, StoragePosition *position);
 void storage_write_position(int text, const StoragePosition *position);
 
+// The appearance settings as stored. ``settings.c`` checks them and fills in defaults.
+typedef struct {
+  uint8_t show_time;
+  uint8_t size_mask;
+  uint8_t menu_size;
+} StorageSettings;
+
+bool storage_read_settings(StorageSettings *settings);
+void storage_write_settings(const StorageSettings *settings);
+
 // The text that was selected in the menu last time.
 int storage_read_menu_text(int default_text);
 void storage_write_menu_text(int text);

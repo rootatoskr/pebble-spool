@@ -10,10 +10,14 @@ static void prv_text_changed(int text) {
   text_window_handle_text_changed(text);
 }
 
+// New settings take effect when a window is opened again.
+static void prv_settings_changed(void) {
+}
+
 int main(void) {
   storage_init();
   menu_window_push();
-  transfer_init(prv_text_changed);
+  transfer_init(prv_text_changed, prv_settings_changed);
   app_event_loop();
   // Popping unloads the windows, which saves the reading position and the selection.
   window_stack_pop_all(false);

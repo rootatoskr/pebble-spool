@@ -1,6 +1,8 @@
 #include "text_window.h"
 
+#include "settings.h"
 #include "storage.h"
+#include "transfer.h"
 
 #define TEXT_MARGIN 4
 // The progress indicator is a bar on the right edge with a gap between it and the text.
@@ -9,11 +11,10 @@
 #define INDICATOR_MIN_HEIGHT 12
 // Layer coordinates are 16-bit, so text taller than this is cut off.
 #define MAX_TEXT_HEIGHT 30000
-#define FONT_COUNT 4
-#define DEFAULT_TEXT_SIZE 20
+#define FONT_COUNT SETTINGS_SIZE_COUNT
 #define SCROLL_REPEAT_INTERVAL_MS 300
 
-static const int FONT_SIZES[FONT_COUNT] = {14, 18, 20, 24};
+// In the order of ``SETTINGS_SIZES``.
 static const uint32_t FONT_RESOURCES[FONT_COUNT] = {
   RESOURCE_ID_FONT_DEJAVU_14,
   RESOURCE_ID_FONT_DEJAVU_18,
@@ -45,20 +46,6 @@ static int16_t s_content_height;
 static int32_t s_scroll_offset;
 // The reading position as it is in storage, to skip writes that would change nothing.
 static StoragePosition s_stored_position;
-
-// Index of the font with ``size`` pixels, or of the default size if there is none.
-static int prv_font_index(int size) {
-  int index = 0;
-  for (int i = 0; i < FONT_COUNT; i++) {
-    if (FONT_SIZES[i] == size) {
-      return i;
-    }
-    if (FONT_SIZES[i] == DEFAULT_TEXT_SIZE) {
-      index = i;
-    }
-  }
-  return index;
-}
 
 static int16_t prv_text_height(const char *text, GFont font, int16_t width, GTextAlignment alignment) {
   int16_t height = graphics_text_layout_get_content_size(
@@ -209,9 +196,14 @@ static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *c
   int32_t old_height = s_content_height;
 
   GFont old_font = s_font;
-  s_font_index = (s_font_index + 1) % FONT_COUNT;
+  Settings settings;
+  settings_load(&settings);
+  int size = settings_next_enabled_size(settings.size_mask, SETTINGS_SIZES[s_font_index]);
+  s_font_index = settings_size_index(size);
   s_font = fonts_load_custom_font(resource_get_handle(FONT_RESOURCES[s_font_index]));
-  storage_write_text_size(FONT_SIZES[s_font_index]);
+  storage_write_text_size(size);
+  // The settings page shows the size the watch uses.
+  transfer_send_state();
   prv_layout();
   fonts_unload_custom_font(old_font);
 
@@ -257,7 +249,10 @@ static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
-  s_font_index = prv_font_index(storage_read_text_size(DEFAULT_TEXT_SIZE));
+  Settings settings;
+  settings_load(&settings);
+  int size = settings_nearest_enabled_size(settings.size_mask, settings_text_size());
+  s_font_index = settings_size_index(size);
   s_font = fonts_load_custom_font(resource_get_handle(FONT_RESOURCES[s_font_index]));
 
   // The status bar shows the current time. The text, the scrolling by screens and the

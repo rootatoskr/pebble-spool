@@ -11,6 +11,7 @@
 #define KEY_POSITION_BASE 20
 #define KEY_MENU_TEXT 30
 #define KEY_TEXT_SIZE 31
+#define KEY_SETTINGS 32
 
 #define SCHEMA_VERSION 3
 #define SIDE_NONE 0
@@ -306,6 +307,14 @@ bool storage_read_position(int text, StoragePosition *position) {
 
 void storage_write_position(int text, const StoragePosition *position) {
   persist_write_data(KEY_POSITION_BASE + text, position, sizeof(*position));
+}
+
+bool storage_read_settings(StorageSettings *settings) {
+  return persist_read_data(KEY_SETTINGS, settings, sizeof(*settings)) == (int)sizeof(*settings);
+}
+
+void storage_write_settings(const StorageSettings *settings) {
+  persist_write_data(KEY_SETTINGS, settings, sizeof(*settings));
 }
 
 int storage_read_menu_text(int default_text) {

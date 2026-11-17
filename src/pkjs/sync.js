@@ -5,6 +5,12 @@ var text = require('./text');
 
 // Keep in sync with ``STORAGE_TEXT_COUNT`` in ``src/c/storage.h``.
 var SLOT_COUNT = 5;
+// The text sizes in pixels, smallest first; bit ``i`` of a size mask stands for SIZES[i].
+// Keep in sync with ``SETTINGS_SIZES`` in ``src/c/settings.c``.
+var SIZES = [14, 18, 20, 24];
+var DEFAULT_MENU_SIZE = 18;
+// The queue item that stands for the appearance settings; texts are queued by slot number.
+var SETTINGS_ITEM = 'settings';
 
 // localStorage keeps four values for every slot, the slot number is appended to the key:
 // - text: the text as the user saved it;
@@ -12,6 +18,11 @@ var SLOT_COUNT = 5;
 // - textId: id of that version, the watch stores it together with the text;
 // - syncState: 'pending', 'synced' or 'failed'.
 // One more key, lastSlot, remembers which slot was saved last.
+// The appearance settings use four keys of their own:
+// - settings: the settings the phone wants on the watch, as JSON;
+// - settingsState: 'synced', 'pending' or 'failed', as for texts;
+// - watchSettings: the settings the watch reported last, as JSON;
+// - textSize: the text size the watch reported last.
 function storageKey(field, slot) {
   return field + slot;
 }
@@ -42,6 +53,93 @@ function localIds(storage) {
   return ids;
 }
 
+// Appearance settings: ``showTime``, ``sizes`` (the sizes that holding Select cycles
+// through, never empty) and ``menuSize``. Anything invalid becomes the default.
+function normalizeSettings(settings) {
+  settings = settings || {};
+  var sizes = SIZES.filter(function(size) {
+    return (settings.sizes || []).indexOf(size) >= 0;
+  });
+  return {
+    showTime: settings.showTime !== false,
+    sizes: sizes.length > 0 ? sizes : SIZES.slice(),
+    menuSize: SIZES.indexOf(settings.menuSize) >= 0 ? settings.menuSize : DEFAULT_MENU_SIZE
+  };
+}
+
+function settingsEqual(a, b) {
+  return JSON.stringify(normalizeSettings(a)) === JSON.stringify(normalizeSettings(b));
+}
+
+function encodeSizeMask(sizes) {
+  var mask = 0;
+  SIZES.forEach(function(size, index) {
+    if (sizes.indexOf(size) >= 0) {
+      mask |= 1 << index;
+    }
+  });
+  return mask;
+}
+
+function decodeSizeMask(mask) {
+  return SIZES.filter(function(size, index) {
+    return (mask & (1 << index)) !== 0;
+  });
+}
+
+// The AppMessage that sends the settings to the watch.
+function settingsMessage(settings) {
+  settings = normalizeSettings(settings);
+  return {
+    'ShowTime': settings.showTime ? 1 : 0,
+    'SizeMask': encodeSizeMask(settings.sizes),
+    'MenuSize': settings.menuSize
+  };
+}
+
+function readSettings(storage, key) {
+  try {
+    var value = storage.getItem(key);
+    return value === null ? null : normalizeSettings(JSON.parse(value));
+  } catch (e) {
+    return null;
+  }
+}
+
+// What the settings page shows: the settings the phone wants, or before anything was
+// saved, the ones the watch reported, or the defaults; and the watch's text size.
+function pageSettings(storage) {
+  var textSize = Number(storage.getItem('textSize'));
+  return {
+    settings: readSettings(storage, 'settings') || readSettings(storage, 'watchSettings') ||
+      normalizeSettings(null),
+    textSize: SIZES.indexOf(textSize) >= 0 ? textSize : null,
+    failed: storage.getItem('settingsState') === 'failed'
+  };
+}
+
+// Stores the settings the watch reported. Returns true if the settings the phone wants
+// differ and have to be sent again. Without a pending change the watch's settings are
+// taken as they are: they may have been set from another phone.
+function takeWatchSettings(storage, watchSettings, textSize) {
+  storage.setItem('watchSettings', JSON.stringify(watchSettings));
+  if (textSize !== null) {
+    storage.setItem('textSize', String(textSize));
+  }
+  var state = storage.getItem('settingsState');
+  var wanted = readSettings(storage, 'settings');
+  if (!wanted || (state !== 'pending' && state !== 'failed')) {
+    storage.setItem('settings', JSON.stringify(watchSettings));
+    storage.setItem('settingsState', 'synced');
+    return false;
+  }
+  if (settingsEqual(wanted, watchSettings)) {
+    storage.setItem('settingsState', 'synced');
+    return false;
+  }
+  return true;
+}
+
 // Reads the ids the watch reports on launch. Returns null for any other message.
 function watchIdsFromPayload(payload) {
   var ids = [];
@@ -53,6 +151,25 @@ function watchIdsFromPayload(payload) {
     ids.push(id);
   }
   return ids;
+}
+
+// Reads the state the watch reports: the ids of all slots and, from a watch that has
+// appearance settings, those and its text size. Returns null for any other message.
+function stateFromPayload(payload) {
+  var ids = watchIdsFromPayload(payload);
+  if (!ids) {
+    return null;
+  }
+  var state = {ids: ids, settings: null, textSize: null};
+  if (payload.SizeMask !== undefined) {
+    state.settings = normalizeSettings({
+      showTime: payload.ShowTime !== 0,
+      sizes: decodeSizeMask(payload.SizeMask),
+      menuSize: payload.MenuSize
+    });
+    state.textSize = SIZES.indexOf(payload.TextSize) >= 0 ? payload.TextSize : null;
+  }
+  return state;
 }
 
 // Slots whose version on the watch differs from the one saved on the phone.
@@ -67,17 +184,22 @@ function slotsToResend(phoneIds, watchIds) {
   return slots;
 }
 
-// Adds a slot to the queue of slots waiting to be sent. A slot is never queued twice.
-// ``first`` puts it at the front: a text the user has just saved goes before resends.
-function queueAdd(queue, slot, first) {
-  var position = queue.indexOf(slot);
+// Adds a slot or SETTINGS_ITEM to the queue of what waits to be sent. Nothing is queued
+// twice. ``first`` puts a slot at the front: a text the user has just saved goes before
+// resends. The settings always go first: they are one short message.
+function queueAdd(queue, item, first) {
+  var position = queue.indexOf(item);
+  if (item === SETTINGS_ITEM) {
+    first = true;
+  }
   if (first) {
     if (position >= 0) {
       queue.splice(position, 1);
     }
-    queue.unshift(slot);
+    var at = (item !== SETTINGS_ITEM && queue[0] === SETTINGS_ITEM) ? 1 : 0;
+    queue.splice(at, 0, item);
   } else if (position < 0) {
-    queue.push(slot);
+    queue.push(item);
   }
 }
 
@@ -135,6 +257,17 @@ function chunkMessage(transfer, index) {
 
 module.exports = {
   SLOT_COUNT: SLOT_COUNT,
+  SIZES: SIZES,
+  SETTINGS_ITEM: SETTINGS_ITEM,
+  normalizeSettings: normalizeSettings,
+  settingsEqual: settingsEqual,
+  encodeSizeMask: encodeSizeMask,
+  decodeSizeMask: decodeSizeMask,
+  settingsMessage: settingsMessage,
+  readSettings: readSettings,
+  pageSettings: pageSettings,
+  takeWatchSettings: takeWatchSettings,
+  stateFromPayload: stateFromPayload,
   storageKey: storageKey,
   migrateStorage: migrateStorage,
   localIds: localIds,

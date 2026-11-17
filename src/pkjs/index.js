@@ -43,17 +43,25 @@ function finishTransfer(transfer, ok) {
     return;
   }
   currentTransfer = null;
-  setSyncState(transfer.slot, ok ? 'synced' : 'failed');
-  console.log('Slot ' + transfer.slot + ', transfer ' + transfer.id +
-              (ok ? ' stored on the watch' : ' failed'));
+  if (transfer.item === sync.SETTINGS_ITEM) {
+    localStorage.setItem('settingsState', ok ? 'synced' : 'failed');
+    console.log('Settings ' + (ok ? 'stored on the watch' : 'failed'));
+  } else {
+    setSyncState(transfer.slot, ok ? 'synced' : 'failed');
+    console.log('Slot ' + transfer.slot + ', transfer ' + transfer.id +
+                (ok ? ' stored on the watch' : ' failed'));
+  }
   startNextTransfer();
 }
 
-function sendChunk(transfer, index) {
-  var isCancelled = function() {
+function isCurrent(transfer) {
+  return function() {
     return transfer !== currentTransfer;
   };
-  sendReliably(sync.chunkMessage(transfer, index), isCancelled, function() {
+}
+
+function sendChunk(transfer, index) {
+  sendReliably(sync.chunkMessage(transfer, index), isCurrent(transfer), function() {
     // After the last chunk the watch confirms with ResultId/ResultOk.
     if (index + 1 < transfer.chunks.length) {
       sendChunk(transfer, index + 1);
@@ -63,12 +71,31 @@ function sendChunk(transfer, index) {
   });
 }
 
-// Sends the next waiting slot, unless a transfer is still running.
+// Sends the settings. The watch acknowledges the message and answers with its state.
+function sendSettings(transfer) {
+  var settings = sync.readSettings(localStorage, 'settings');
+  sendReliably(sync.settingsMessage(settings), isCurrent(transfer), function() {
+    finishTransfer(transfer, true);
+  }, function() {
+    finishTransfer(transfer, false);
+  });
+}
+
+// Sends what waits next in the queue, unless a transfer is still running.
 function startNextTransfer() {
   if (currentTransfer || queue.length === 0) {
     return;
   }
-  var transfer = sync.buildTransfer(localStorage, queue.shift());
+  var item = queue.shift();
+  if (item === sync.SETTINGS_ITEM) {
+    currentTransfer = {item: item};
+    localStorage.setItem('settingsState', 'pending');
+    console.log('Settings: sending');
+    sendSettings(currentTransfer);
+    return;
+  }
+  var transfer = sync.buildTransfer(localStorage, item);
+  transfer.item = item;
   currentTransfer = transfer;
   setSyncState(transfer.slot, 'pending');
   console.log('Slot ' + transfer.slot + ', transfer ' + transfer.id + ': ' +
@@ -76,8 +103,20 @@ function startNextTransfer() {
   sendChunk(transfer, 0);
 }
 
-// Saves a new version of a slot and sends it before anything else. An empty text
-// clears the slot on the watch.
+// Puts ``item`` at the front of the queue. A running transfer of something else is
+// abandoned and gets its turn again right after it. The caller starts the queue.
+function sendFirst(item) {
+  if (currentTransfer) {
+    if (currentTransfer.item !== item) {
+      sync.queueAdd(queue, currentTransfer.item, true);
+    }
+    currentTransfer = null;
+  }
+  sync.queueAdd(queue, item, true);
+}
+
+// Saves a new version of a slot to be sent before other texts. An empty text clears
+// the slot on the watch.
 function saveText(slot, name, newText) {
   localStorage.setItem(sync.storageKey('text', slot), newText);
   localStorage.setItem(sync.storageKey('name', slot), name);
@@ -85,25 +124,22 @@ function saveText(slot, name, newText) {
   localStorage.setItem(sync.storageKey('textId', slot),
                        String(Math.floor(Math.random() * 0x7FFFFFFE) + 1));
   setSyncState(slot, 'pending');
-  if (currentTransfer) {
-    // The running transfer is abandoned. If it belongs to another slot, that slot
-    // gets its turn again right after this one.
-    if (currentTransfer.slot !== slot) {
-      sync.queueAdd(queue, currentTransfer.slot, true);
-    }
-    currentTransfer = null;
-  }
-  sync.queueAdd(queue, slot, true);
-  startNextTransfer();
+  sendFirst(slot);
 }
 
-// The watch reported which versions it has. Send ours again where it has a different
-// one: this restores the texts after a broken transfer or a reinstall.
-function handleWatchState(watchIds) {
+function saveSettings(settings) {
+  localStorage.setItem('settings', JSON.stringify(sync.normalizeSettings(settings)));
+  localStorage.setItem('settingsState', 'pending');
+  sendFirst(sync.SETTINGS_ITEM);
+}
+
+// The watch reported its state. Send our texts again where it has a different version:
+// this restores them after a broken transfer or a reinstall. The same for settings.
+function handleWatchState(state) {
   var phoneIds = sync.localIds(localStorage);
-  var resend = sync.slotsToResend(phoneIds, watchIds);
+  var resend = sync.slotsToResend(phoneIds, state.ids);
   for (var slot = 0; slot < sync.SLOT_COUNT; slot++) {
-    var busy = currentTransfer && currentTransfer.slot === slot;
+    var busy = currentTransfer && currentTransfer.item === slot;
     if (resend.indexOf(slot) >= 0) {
       if (!busy) {
         sync.queueAdd(queue, slot, false);
@@ -111,6 +147,14 @@ function handleWatchState(watchIds) {
     } else if (phoneIds[slot] !== null && !busy && queue.indexOf(slot) < 0) {
       setSyncState(slot, 'synced');
     }
+  }
+  var settingsBusy = (currentTransfer && currentTransfer.item === sync.SETTINGS_ITEM) ||
+    queue.indexOf(sync.SETTINGS_ITEM) >= 0;
+  if (state.settings && !settingsBusy &&
+      sync.takeWatchSettings(localStorage, state.settings, state.textSize)) {
+    sync.queueAdd(queue, sync.SETTINGS_ITEM, true);
+  } else if (state.settings && settingsBusy && state.textSize !== null) {
+    localStorage.setItem('textSize', String(state.textSize));
   }
   startNextTransfer();
 }
@@ -133,9 +177,9 @@ Pebble.addEventListener('appmessage', function(e) {
     }
     return;
   }
-  var watchIds = sync.watchIdsFromPayload(payload);
-  if (watchIds) {
-    handleWatchState(watchIds);
+  var state = sync.stateFromPayload(payload);
+  if (state) {
+    handleWatchState(state);
   }
 });
 
@@ -152,5 +196,6 @@ Pebble.addEventListener('webviewclosed', function(e) {
   if (result) {
     localStorage.setItem('lastSlot', String(result.slot));
     saveText(result.slot, result.name, result.text);
+    startNextTransfer();
   }
 });
