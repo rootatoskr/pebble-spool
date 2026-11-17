@@ -8,6 +8,7 @@
 #define ROW_WITH_NOTICE_HEIGHT 64
 
 static Window *s_window;
+static StatusBarLayer *s_status_bar;
 static MenuLayer *s_menu_layer;
 static TextLayer *s_empty_layer;
 // The system menu font has no Ukrainian letters, so rows are drawn with DejaVu.
@@ -93,6 +94,14 @@ static void prv_window_load(Window *window) {
   s_title_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_DEJAVU_24));
   s_notice_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_DEJAVU_18));
 
+  // The status bar shows the current time on its own.
+  s_status_bar = status_bar_layer_create();
+  status_bar_layer_set_colors(s_status_bar, GColorWhite, GColorBlack);
+  status_bar_layer_set_separator_mode(s_status_bar, StatusBarLayerSeparatorModeDotted);
+  layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
+  bounds.origin.y = STATUS_BAR_LAYER_HEIGHT;
+  bounds.size.h -= STATUS_BAR_LAYER_HEIGHT;
+
   s_menu_layer = menu_layer_create(bounds);
   menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks) {
     .get_num_rows = prv_get_num_rows,
@@ -103,7 +112,8 @@ static void prv_window_load(Window *window) {
   menu_layer_set_click_config_onto_window(s_menu_layer, window);
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
 
-  s_empty_layer = text_layer_create(GRect(4, bounds.size.h / 2 - 32, bounds.size.w - 8, 64));
+  s_empty_layer = text_layer_create(GRect(4, bounds.origin.y + bounds.size.h / 2 - 32,
+                                           bounds.size.w - 8, 64));
   text_layer_set_font(s_empty_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_empty_layer, GTextAlignmentCenter);
   text_layer_set_text(s_empty_layer, "Paste text in settings on your phone");
@@ -129,6 +139,7 @@ static void prv_window_disappear(Window *window) {
 static void prv_window_unload(Window *window) {
   text_layer_destroy(s_empty_layer);
   menu_layer_destroy(s_menu_layer);
+  status_bar_layer_destroy(s_status_bar);
   fonts_unload_custom_font(s_notice_font);
   fonts_unload_custom_font(s_title_font);
 }

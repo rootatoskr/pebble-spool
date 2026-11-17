@@ -22,6 +22,7 @@ static const uint32_t FONT_RESOURCES[FONT_COUNT] = {
 static const int16_t FONT_BOTTOM_PADDING[FONT_COUNT] = {8, 10, 14};
 
 static Window *s_window;
+static StatusBarLayer *s_status_bar;
 static ScrollLayer *s_scroll_layer;
 static TextLayer *s_notice_layer;
 static TextLayer *s_text_layer;
@@ -246,6 +247,15 @@ static void prv_window_load(Window *window) {
   }
   s_font = fonts_load_custom_font(resource_get_handle(FONT_RESOURCES[s_font_index]));
 
+  // The status bar shows the current time. The text, the scrolling by screens and the
+  // progress indicator use only the area below it.
+  s_status_bar = status_bar_layer_create();
+  status_bar_layer_set_colors(s_status_bar, GColorWhite, GColorBlack);
+  status_bar_layer_set_separator_mode(s_status_bar, StatusBarLayerSeparatorModeDotted);
+  layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
+  bounds.origin.y = STATUS_BAR_LAYER_HEIGHT;
+  bounds.size.h -= STATUS_BAR_LAYER_HEIGHT;
+
   s_scroll_layer = scroll_layer_create(bounds);
   scroll_layer_set_shadow_hidden(s_scroll_layer, true);
   scroll_layer_set_callbacks(s_scroll_layer, (ScrollLayerCallbacks) {
@@ -267,7 +277,7 @@ static void prv_window_load(Window *window) {
   text_layer_set_overflow_mode(s_text_layer, GTextOverflowModeWordWrap);
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_text_layer));
 
-  s_indicator_layer = layer_create(GRect(bounds.size.w - INDICATOR_WIDTH, 0,
+  s_indicator_layer = layer_create(GRect(bounds.size.w - INDICATOR_WIDTH, bounds.origin.y,
                                          INDICATOR_WIDTH, bounds.size.h));
   layer_set_update_proc(s_indicator_layer, prv_indicator_update_proc);
   layer_add_child(window_layer, s_indicator_layer);
@@ -284,6 +294,7 @@ static void prv_window_unload(Window *window) {
   text_layer_destroy(s_text_layer);
   text_layer_destroy(s_notice_layer);
   scroll_layer_destroy(s_scroll_layer);
+  status_bar_layer_destroy(s_status_bar);
   fonts_unload_custom_font(s_font);
   free(s_text);
   s_text = NULL;
