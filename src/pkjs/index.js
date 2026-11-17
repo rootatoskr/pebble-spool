@@ -187,15 +187,25 @@ Pebble.addEventListener('showConfiguration', function() {
   Pebble.openURL(configPage.buildUrl({
     slots: sync.pageSlots(localStorage),
     selected: sync.selectedSlot(localStorage),
-    maxBytes: text.MAX_TEXT_BYTES
+    maxBytes: text.MAX_TEXT_BYTES,
+    sizes: sync.SIZES,
+    appearance: sync.pageSettings(localStorage)
   }));
 });
 
 Pebble.addEventListener('webviewclosed', function(e) {
   var result = configPage.parseResponse(e.response, sync.SLOT_COUNT);
-  if (result) {
-    localStorage.setItem('lastSlot', String(result.slot));
-    saveText(result.slot, result.name, result.text);
-    startNextTransfer();
+  if (!result) {
+    return;
   }
+  localStorage.setItem('lastSlot', String(result.slot));
+  // Only what changed is sent: the settings first, then the text.
+  if (result.settings &&
+      !sync.settingsEqual(result.settings, sync.readSettings(localStorage, 'settings'))) {
+    saveSettings(result.settings);
+  }
+  if (result.text !== null) {
+    saveText(result.slot, result.name, result.text);
+  }
+  startNextTransfer();
 });

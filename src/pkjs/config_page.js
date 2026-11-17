@@ -110,7 +110,11 @@ var STYLE = [
   '.tabs span{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}',
   '.tabs b{display:block;font-size:15px}',
   '.row{display:flex;gap:8px}',
-  '.row button{flex:1 1 0}'
+  '.row button{flex:1 1 0}',
+  'h2{font-size:17px;margin:24px 0 4px}',
+  '.choice{display:inline-flex;align-items:center;gap:6px;margin:6px 16px 6px 0;',
+  'color:var(--fg);font-size:16px}',
+  '.choice input{width:20px;height:20px;margin:0}'
 ].join('');
 
 var BODY = [
@@ -130,6 +134,15 @@ var BODY = [
   '<div id="warning" class="message" hidden></div>',
   '<p class="hint">Емодзі та символи, яких немає у шрифті годинника, ',
   'буде замінено на «?». Зберігається лише вибраний текст.</p>',
+  '<h2>Вигляд</h2>',
+  '<div id="settings-failed" class="message" hidden>Налаштування вигляду ще не дійшли ',
+  'до годинника. Відкрий pebble-spool на годиннику – вони надішлються самі.</div>',
+  '<label class="choice"><input type="checkbox" id="show-time">Показувати час</label>',
+  '<label>Розміри тексту, між якими перемикає утримання Select</label>',
+  '<div id="sizes"></div>',
+  '<div id="text-size" class="hint"></div>',
+  '<label>Розмір назв у меню</label>',
+  '<div id="menu-sizes"></div>',
   '<button id="save">Зберегти</button>',
   '<button id="clear" class="secondary">Очистити</button>',
   '<div id="confirm" class="message" hidden><div id="confirm-text"></div>',
@@ -157,6 +170,68 @@ function pageMain() {
     return {name: slot.name, text: slot.text};
   });
   var selected = state.selected;
+  var settings = JSON.parse(JSON.stringify(state.appearance.settings));
+  var sizeBoxes = [];
+
+  function settingsChanged() {
+    return JSON.stringify(settings) !== JSON.stringify(state.appearance.settings);
+  }
+
+  // Builds the size choices once. Unchecking the last checked size is not possible:
+  // holding Select needs at least one size.
+  function renderAppearance() {
+    var showTime = document.getElementById('show-time');
+    var sizes = document.getElementById('sizes');
+    var menuSizes = document.getElementById('menu-sizes');
+    document.getElementById('settings-failed').hidden = !state.appearance.failed;
+    showTime.checked = settings.showTime;
+    showTime.addEventListener('change', function() {
+      settings.showTime = showTime.checked;
+    });
+    state.sizes.forEach(function(size) {
+      var label = document.createElement('label');
+      var box = document.createElement('input');
+      label.className = 'choice';
+      box.type = 'checkbox';
+      box.checked = settings.sizes.indexOf(size) >= 0;
+      box.addEventListener('change', function() {
+        settings.sizes = state.sizes.filter(function(other, index) {
+          return sizeBoxes[index].checked;
+        });
+        updateSizeBoxes();
+      });
+      sizeBoxes.push(box);
+      label.appendChild(box);
+      label.appendChild(document.createTextNode(String(size)));
+      sizes.appendChild(label);
+
+      var menuLabel = document.createElement('label');
+      var radio = document.createElement('input');
+      menuLabel.className = 'choice';
+      radio.type = 'radio';
+      radio.name = 'menu-size';
+      radio.checked = settings.menuSize === size;
+      radio.addEventListener('change', function() {
+        settings.menuSize = size;
+      });
+      menuLabel.appendChild(radio);
+      menuLabel.appendChild(document.createTextNode(String(size)));
+      menuSizes.appendChild(menuLabel);
+    });
+    document.getElementById('text-size').textContent = state.appearance.textSize ?
+      'Зараз на годиннику: ' + state.appearance.textSize : '';
+    updateSizeBoxes();
+  }
+
+  function updateSizeBoxes() {
+    sizeBoxes.forEach(function(box) {
+      box.disabled = box.checked && settings.sizes.length === 1;
+    });
+  }
+
+  function isTextChanged() {
+    return isEdited(selected);
+  }
 
   function isEdited(index) {
     return drafts[index].name !== state.slots[index].name ||
@@ -216,13 +291,21 @@ function pageMain() {
     update();
   }
 
-  // Closes the page and hands the result to PebbleKit JS.
+  // Closes the page and hands the result to PebbleKit JS: the text only if it is
+  // given (it changed or is being cleared), the settings only if they changed.
   function finish(name, value) {
     // The emulator passes the address to return to, the phone app uses a fixed one.
     var match = location.search.match(/[?&]return_to=([^&]*)/);
     var target = match ? decodeURIComponent(match[1]) : 'pebblejs://close#';
-    var result = JSON.stringify({slot: selected, name: name, text: value});
-    var encoded = utf8ToBase64(result, state.alphabet);
+    var result = {slot: selected};
+    if (value !== null) {
+      result.name = name;
+      result.text = value;
+    }
+    if (settingsChanged()) {
+      result.settings = settings;
+    }
+    var encoded = utf8ToBase64(JSON.stringify(result), state.alphabet);
     location.href = target + encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
 
@@ -243,7 +326,9 @@ function pageMain() {
   });
   save.addEventListener('click', function() {
     var draft = drafts[selected];
-    if (normalizeText(draft.text)) {
+    if (!isTextChanged()) {
+      finish(null, null);
+    } else if (normalizeText(draft.text)) {
       finish(draft.name, draft.text);
     } else {
       askToClear();
@@ -255,11 +340,14 @@ function pageMain() {
   });
   document.getElementById('confirm-no').addEventListener('click', hideConfirm);
 
+  renderAppearance();
   select(selected);
 }
 
 // ``state``: ``slots`` (for every slot its ``text``, ``name`` and ``state``: 'empty',
-// 'synced', 'pending' or 'failed'), ``selected`` (the slot to open with) and ``maxBytes``.
+// 'synced', 'pending' or 'failed'), ``selected`` (the slot to open with), ``maxBytes``,
+// ``sizes`` (the text sizes) and ``appearance`` (``settings``, the watch's ``textSize``
+// or null, and ``failed``).
 function buildUrl(state) {
   state.alphabet = BASE64_ALPHABET;
   // "<" must not appear in the inline script, and U+2028/U+2029 break string literals.
@@ -278,8 +366,10 @@ function buildUrl(state) {
   return 'data:text/html;charset=utf-8;base64,' + utf8ToBase64(html, BASE64_ALPHABET);
 }
 
-// Returns ``{slot, name, text}`` from the page's close URL, or null if the page was
-// closed without saving or the result is not one this page produces.
+// Returns ``{slot, name, text, settings}`` from the page's close URL, or null if the
+// page was closed without saving or the result is not one this page produces. ``text``
+// and ``name`` are null when the text did not change, ``settings`` is null when the
+// settings did not change.
 function parseResponse(response, slotCount) {
   if (!response) {
     return null;
@@ -290,11 +380,25 @@ function parseResponse(response, slotCount) {
   } catch (e) {
     return null;
   }
-  if (!result || typeof result.text !== 'string' || typeof result.name !== 'string' ||
-      result.slot !== Math.floor(result.slot) || result.slot < 0 || result.slot >= slotCount) {
+  if (!result || result.slot !== Math.floor(result.slot) || result.slot < 0 ||
+      result.slot >= slotCount) {
     return null;
   }
-  return {slot: result.slot, name: result.name, text: result.text};
+  var hasText = result.text !== undefined;
+  if (hasText && (typeof result.text !== 'string' || typeof result.name !== 'string')) {
+    return null;
+  }
+  var settings = result.settings;
+  if (settings !== undefined && (!settings || typeof settings.showTime !== 'boolean' ||
+      !Array.isArray(settings.sizes) || typeof settings.menuSize !== 'number')) {
+    return null;
+  }
+  return {
+    slot: result.slot,
+    name: hasText ? result.name : null,
+    text: hasText ? result.text : null,
+    settings: settings === undefined ? null : settings
+  };
 }
 
 module.exports = {
