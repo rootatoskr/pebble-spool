@@ -81,72 +81,185 @@ function urlSafeBase64ToUtf8(encoded) {
 
 var STYLE = [
   ':root{color-scheme:light dark;--bg:#fff;--fg:#111;--muted:#666;--border:#bbb;',
-  '--accent:#0a58ca;--danger:#b3261e;--danger-bg:#fdecea}',
+  '--tab-bg:#f2f2f2;--accent:#0a58ca;--danger:#b3261e;--danger-bg:#fdecea}',
   '@media(prefers-color-scheme:dark){:root{--bg:#121212;--fg:#eee;--muted:#aaa;',
-  '--border:#555;--accent:#3d7fe0;--danger:#ff8a80;--danger-bg:#3a1c1c}}',
+  '--border:#555;--tab-bg:#1e1e1e;--accent:#3d7fe0;--danger:#ff8a80;--danger-bg:#3a1c1c}}',
   'body{margin:0;padding:16px;background:var(--bg);color:var(--fg);',
   'font:16px/1.4 -apple-system,system-ui,sans-serif}',
   'h1{font-size:20px;margin:0 0 12px}',
-  'textarea{display:block;width:100%;box-sizing:border-box;height:45vh;padding:10px;',
+  'label{display:block;margin:12px 0 4px;color:var(--muted);font-size:14px}',
+  'textarea{display:block;width:100%;box-sizing:border-box;padding:10px;',
   'font:inherit;color:inherit;background:transparent;border:1px solid var(--border);',
   'border-radius:8px}',
+  '#text{height:40vh}',
+  '#name{height:auto;resize:none}',
   '#counter{margin:8px 0;color:var(--muted)}',
   '#counter.over{color:var(--danger);font-weight:600}',
   '.message{margin:8px 0;padding:10px 12px;border-radius:8px;background:var(--danger-bg);',
   'color:var(--danger)}',
-  '.hint{margin:8px 0;color:var(--muted);font-size:14px}',
+  '.hint{margin:4px 0 8px;color:var(--muted);font-size:14px}',
   'button{display:block;width:100%;margin-top:12px;padding:14px;font:inherit;',
   'font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:8px}',
-  'button:disabled{opacity:.4}'
+  'button:disabled{opacity:.4}',
+  'button.secondary{color:var(--danger);background:transparent;border:1px solid var(--danger)}',
+  'button.danger{color:var(--bg);background:var(--danger)}',
+  '.tabs{display:flex;gap:6px}',
+  '.tabs button{flex:1 1 0;min-width:0;width:auto;margin:0;padding:6px 4px;font-size:13px;',
+  'font-weight:400;color:var(--fg);background:var(--tab-bg);border:1px solid var(--border)}',
+  '.tabs button.active{color:#fff;background:var(--accent);border-color:var(--accent)}',
+  '.tabs span{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}',
+  '.tabs b{display:block;font-size:15px}',
+  '.row{display:flex;gap:8px}',
+  '.row button{flex:1 1 0}'
 ].join('');
 
 var BODY = [
-  '<h1>Текст для годинника</h1>',
-  '<div id="failed" class="message" hidden>Останнє збереження не дійшло до годинника. ',
+  '<h1>Тексти для годинника</h1>',
+  '<div id="tabs" class="tabs"></div>',
+  '<div id="failed" class="message" hidden>Цей текст ще не дійшов до годинника. ',
   'Відкрий pebble-spool на годиннику – текст надішлеться сам. ',
   'Якщо ні, натисни «Зберегти» ще раз.</div>',
+  '<label for="name">Назва</label>',
+  // A one-line textarea, not an input: an input drops pasted line breaks and glues
+  // the words together, a textarea keeps them and makeName turns them into spaces.
+  '<textarea id="name" rows="1" placeholder="Перший рядок тексту"></textarea>',
+  '<div id="name-hint" class="hint"></div>',
+  '<label for="text">Текст</label>',
   '<textarea id="text" placeholder="Встав текст сюди"></textarea>',
   '<div id="counter"></div>',
   '<div id="warning" class="message" hidden></div>',
   '<p class="hint">Емодзі та символи, яких немає у шрифті годинника, ',
-  'буде замінено на «?».</p>',
-  '<button id="save">Зберегти</button>'
+  'буде замінено на «?». Зберігається лише вибраний текст.</p>',
+  '<button id="save">Зберегти</button>',
+  '<button id="clear" class="secondary">Очистити</button>',
+  '<div id="confirm" class="message" hidden><div id="confirm-text"></div>',
+  '<div class="row"><button id="confirm-yes" class="danger">Очистити</button>',
+  '<button id="confirm-no" class="secondary">Скасувати</button></div></div>'
 ].join('');
 
 // Runs inside the page. ``state`` and the helper functions are defined before it.
 function pageMain() {
+  var tabs = document.getElementById('tabs');
+  var failed = document.getElementById('failed');
+  var nameField = document.getElementById('name');
+  var nameHint = document.getElementById('name-hint');
   var field = document.getElementById('text');
   var counter = document.getElementById('counter');
   var warning = document.getElementById('warning');
   var save = document.getElementById('save');
+  var clear = document.getElementById('clear');
+  var confirmBox = document.getElementById('confirm');
+  var confirmText = document.getElementById('confirm-text');
+
+  // Edits of every text are kept while the page is open, but only the selected
+  // text is saved.
+  var drafts = state.slots.map(function(slot) {
+    return {name: slot.name, text: slot.text};
+  });
+  var selected = state.selected;
+
+  function isEdited(index) {
+    return drafts[index].name !== state.slots[index].name ||
+      drafts[index].text !== state.slots[index].text;
+  }
+
+  function isUndelivered(index) {
+    return state.slots[index].state === 'failed' || state.slots[index].state === 'pending';
+  }
+
+  function renderTabs() {
+    tabs.textContent = '';
+    drafts.forEach(function(draft, index) {
+      var button = document.createElement('button');
+      var number = document.createElement('b');
+      var label = document.createElement('span');
+      // "*" marks unsaved edits, "!" a text that has not reached the watch.
+      number.textContent = (index + 1) + (isEdited(index) ? '*' : '') +
+        (isUndelivered(index) ? '!' : '');
+      label.textContent = makeName(draft.name, normalizeText(draft.text)) || 'порожньо';
+      button.appendChild(number);
+      button.appendChild(label);
+      button.className = index === selected ? 'active' : '';
+      button.addEventListener('click', function() {
+        select(index);
+      });
+      tabs.appendChild(button);
+    });
+  }
 
   function update() {
-    var bytes = utf8Length(normalizeText(field.value));
+    var draft = drafts[selected];
+    var normalized = normalizeText(draft.text);
+    var bytes = utf8Length(normalized);
     var over = bytes > state.maxBytes;
     counter.textContent = 'Байтів: ' + bytes + ' з ' + state.maxBytes;
     counter.className = over ? 'over' : '';
     warning.hidden = !over;
     warning.textContent = 'Текст задовгий. Зайвих байтів: ' + (bytes - state.maxBytes) +
       '. Скороти його, щоб зберегти.';
+    nameHint.textContent = 'На годиннику: ' + (makeName(draft.name, normalized) || '–');
+    failed.hidden = !isUndelivered(selected);
     save.disabled = over;
+    clear.disabled = state.slots[selected].state === 'empty';
+    renderTabs();
   }
 
-  document.getElementById('failed').hidden = !state.failed;
-  field.value = state.text;
-  field.addEventListener('input', update);
-  update();
+  function hideConfirm() {
+    confirmBox.hidden = true;
+  }
 
-  save.addEventListener('click', function() {
+  function select(index) {
+    selected = index;
+    hideConfirm();
+    nameField.value = drafts[index].name;
+    field.value = drafts[index].text;
+    update();
+  }
+
+  // Closes the page and hands the result to PebbleKit JS.
+  function finish(name, value) {
     // The emulator passes the address to return to, the phone app uses a fixed one.
     var match = location.search.match(/[?&]return_to=([^&]*)/);
     var target = match ? decodeURIComponent(match[1]) : 'pebblejs://close#';
-    var encoded = utf8ToBase64(JSON.stringify({text: field.value}), state.alphabet);
+    var result = JSON.stringify({slot: selected, name: name, text: value});
+    var encoded = utf8ToBase64(result, state.alphabet);
     location.href = target + encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
+
+  // Saving an empty text clears the slot too, so it asks first as well.
+  function askToClear() {
+    confirmText.textContent = 'Очистити текст ' + (selected + 1) + '? Він зникне з годинника.';
+    confirmBox.hidden = false;
+  }
+
+  nameField.addEventListener('input', function() {
+    drafts[selected].name = nameField.value;
+    update();
   });
+  field.addEventListener('input', function() {
+    drafts[selected].text = field.value;
+    hideConfirm();
+    update();
+  });
+  save.addEventListener('click', function() {
+    var draft = drafts[selected];
+    if (normalizeText(draft.text)) {
+      finish(draft.name, draft.text);
+    } else {
+      askToClear();
+    }
+  });
+  clear.addEventListener('click', askToClear);
+  document.getElementById('confirm-yes').addEventListener('click', function() {
+    finish('', '');
+  });
+  document.getElementById('confirm-no').addEventListener('click', hideConfirm);
+
+  select(selected);
 }
 
-// ``state``: ``text`` to put into the field, ``maxBytes`` and ``failed``
-// (true if the last save did not reach the watch).
+// ``state``: ``slots`` (for every slot its ``text``, ``name`` and ``state``: 'empty',
+// 'synced', 'pending' or 'failed'), ``selected`` (the slot to open with) and ``maxBytes``.
 function buildUrl(state) {
   state.alphabet = BASE64_ALPHABET;
   // "<" must not appear in the inline script, and U+2028/U+2029 break string literals.
@@ -156,19 +269,32 @@ function buildUrl(state) {
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>pebble-spool</title><style>' + STYLE + '</style></head><body>' + BODY +
     '<script>var state=' + stateJson + ';' +
+    'var NAME_MAX_BYTES=' + text.NAME_MAX_BYTES + ';' +
     'var normalizeText=' + text.normalizeText.toString() + ';' +
     'var utf8Length=' + text.utf8Length.toString() + ';' +
+    'var makeName=' + text.makeName.toString() + ';' +
     'var utf8ToBase64=' + utf8ToBase64.toString() + ';' +
     '(' + pageMain.toString() + ')();</script></body></html>';
   return 'data:text/html;charset=utf-8;base64,' + utf8ToBase64(html, BASE64_ALPHABET);
 }
 
-// Returns the text from the page's close URL, or null if the page was closed without saving.
-function parseResponse(response) {
+// Returns ``{slot, name, text}`` from the page's close URL, or null if the page was
+// closed without saving or the result is not one this page produces.
+function parseResponse(response, slotCount) {
   if (!response) {
     return null;
   }
-  return JSON.parse(urlSafeBase64ToUtf8(response)).text;
+  var result;
+  try {
+    result = JSON.parse(urlSafeBase64ToUtf8(response));
+  } catch (e) {
+    return null;
+  }
+  if (!result || typeof result.text !== 'string' || typeof result.name !== 'string' ||
+      result.slot !== Math.floor(result.slot) || result.slot < 0 || result.slot >= slotCount) {
+    return null;
+  }
+  return {slot: result.slot, name: result.name, text: result.text};
 }
 
 module.exports = {

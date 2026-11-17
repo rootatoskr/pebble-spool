@@ -109,6 +109,38 @@ test('the queue sends resends one by one in slot order', function() {
   assert.deepStrictEqual(queue, [4, 2]);
 });
 
+test('pageSlots reports text, name and state of every slot', function() {
+  var storage = fakeStorage({
+    text0: 'Перший', name0: 'Назва', textId0: '1', syncState0: 'synced',
+    text1: 'Другий', name1: '', textId1: '2', syncState1: 'failed',
+    text2: 'Третій', name2: '', textId2: '3', syncState2: 'pending',
+    // A slot that was cleared on the watch.
+    text3: '', name3: '', textId3: '4', syncState3: 'synced',
+    // A clearing that has not reached the watch yet.
+    text4: ' \n', name4: '', textId4: '5', syncState4: 'failed'
+  });
+  assert.deepStrictEqual(sync.pageSlots(storage), [
+    {text: 'Перший', name: 'Назва', state: 'synced'},
+    {text: 'Другий', name: '', state: 'failed'},
+    {text: 'Третій', name: '', state: 'pending'},
+    {text: '', name: '', state: 'empty'},
+    {text: ' \n', name: '', state: 'failed'}
+  ]);
+});
+
+test('pageSlots shows slots never saved on this phone as empty', function() {
+  sync.pageSlots(fakeStorage({})).forEach(function(slot) {
+    assert.deepStrictEqual(slot, {text: '', name: '', state: 'empty'});
+  });
+});
+
+test('selectedSlot opens the slot saved last, 0 by default', function() {
+  assert.strictEqual(sync.selectedSlot(fakeStorage({})), 0);
+  assert.strictEqual(sync.selectedSlot(fakeStorage({lastSlot: '3'})), 3);
+  assert.strictEqual(sync.selectedSlot(fakeStorage({lastSlot: '7'})), 0);
+  assert.strictEqual(sync.selectedSlot(fakeStorage({lastSlot: 'x'})), 0);
+});
+
 test('buildTransfer normalizes the text and splits it into chunks', function() {
   var saved = 'Перший рядок\r\n\r\n\r\n\r\nДругий ' + 'ї'.repeat(600);
   var storage = fakeStorage({text2: saved, name2: '', textId2: '777'});

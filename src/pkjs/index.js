@@ -140,17 +140,17 @@ Pebble.addEventListener('appmessage', function(e) {
 });
 
 Pebble.addEventListener('showConfiguration', function() {
-  var syncState = localStorage.getItem(sync.storageKey('syncState', 0));
   Pebble.openURL(configPage.buildUrl({
-    text: localStorage.getItem(sync.storageKey('text', 0)) || '',
-    maxBytes: text.MAX_TEXT_BYTES,
-    failed: syncState !== null && syncState !== 'synced'
+    slots: sync.pageSlots(localStorage),
+    selected: sync.selectedSlot(localStorage),
+    maxBytes: text.MAX_TEXT_BYTES
   }));
 });
 
 Pebble.addEventListener('webviewclosed', function(e) {
-  var newText = configPage.parseResponse(e.response);
-  if (newText !== null) {
-    saveText(0, '', newText);
+  var result = configPage.parseResponse(e.response, sync.SLOT_COUNT);
+  if (result) {
+    localStorage.setItem('lastSlot', String(result.slot));
+    saveText(result.slot, result.name, result.text);
   }
 });

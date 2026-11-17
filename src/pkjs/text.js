@@ -36,6 +36,8 @@ function normalizeText(text) {
 // The name of a text as the watch stores it: the name the user typed or, without one,
 // the first line of the text. Line breaks become spaces and the result is cut to
 // NAME_MAX_BYTES without cutting a character. ``text`` must be normalized already.
+// The function is also copied into the settings page, where ``NAME_MAX_BYTES``,
+// ``normalizeText`` and ``utf8Length`` are defined next to it.
 function makeName(name, text) {
   var source = normalizeText(name).replace(/\n/g, ' ').replace(/^ +| +$/g, '');
   if (!source) {

@@ -11,6 +11,7 @@ var SLOT_COUNT = 5;
 // - name: the name as the user typed it, may be empty;
 // - textId: id of that version, the watch stores it together with the text;
 // - syncState: 'pending', 'synced' or 'failed'.
+// One more key, lastSlot, remembers which slot was saved last.
 function storageKey(field, slot) {
   return field + slot;
 }
@@ -80,6 +81,30 @@ function queueAdd(queue, slot, first) {
   }
 }
 
+// What the settings page shows for every slot. A slot that was cleared and whose
+// clearing reached the watch counts as empty again.
+function pageSlots(storage) {
+  var slots = [];
+  for (var slot = 0; slot < SLOT_COUNT; slot++) {
+    var saved = storage.getItem(storageKey('text', slot)) || '';
+    var syncState = storage.getItem(storageKey('syncState', slot)) || 'pending';
+    var empty = storage.getItem(storageKey('textId', slot)) === null ||
+      (syncState === 'synced' && !text.normalizeText(saved));
+    slots.push({
+      text: saved,
+      name: storage.getItem(storageKey('name', slot)) || '',
+      state: empty ? 'empty' : syncState
+    });
+  }
+  return slots;
+}
+
+// The slot the settings page opens with: the one saved last.
+function selectedSlot(storage) {
+  var slot = Number(storage.getItem('lastSlot'));
+  return slot >= 0 && slot < SLOT_COUNT && slot === Math.floor(slot) ? slot : 0;
+}
+
 // Everything needed to send the saved version of a slot.
 function buildTransfer(storage, slot) {
   var normalized = text.normalizeText(storage.getItem(storageKey('text', slot)) || '');
@@ -116,6 +141,8 @@ module.exports = {
   watchIdsFromPayload: watchIdsFromPayload,
   slotsToResend: slotsToResend,
   queueAdd: queueAdd,
+  pageSlots: pageSlots,
+  selectedSlot: selectedSlot,
   buildTransfer: buildTransfer,
   chunkMessage: chunkMessage
 };
