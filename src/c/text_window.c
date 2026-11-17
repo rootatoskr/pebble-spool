@@ -191,24 +191,44 @@ static void prv_down_click_handler(ClickRecognizerRef recognizer, void *context)
   prv_scroll_by_page(recognizer, 1);
 }
 
-static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+// Places the scrolled text and the progress indicator below the status bar, or over
+// the whole window when the time is not shown.
+static void prv_place_layers(bool show_time) {
+  GRect bounds = layer_get_bounds(window_get_root_layer(s_window));
+  int16_t top = show_time ? STATUS_BAR_LAYER_HEIGHT : 0;
+  layer_set_hidden(status_bar_layer_get_layer(s_status_bar), !show_time);
+  layer_set_frame(scroll_layer_get_layer(s_scroll_layer),
+                  GRect(0, top, bounds.size.w, bounds.size.h - top));
+  layer_set_frame(s_indicator_layer, GRect(bounds.size.w - INDICATOR_WIDTH, top,
+                                           INDICATOR_WIDTH, bounds.size.h - top));
+}
+
+// Shows the text in ``size`` with or without the time, staying at the same relative
+// position in the text.
+static void prv_apply_appearance(int size, bool show_time) {
   int32_t old_offset = s_scroll_offset;
   int32_t old_height = s_content_height;
+  int index = settings_size_index(size);
+  if (index != s_font_index) {
+    GFont old_font = s_font;
+    s_font_index = index;
+    s_font = fonts_load_custom_font(resource_get_handle(FONT_RESOURCES[s_font_index]));
+    text_layer_set_font(s_text_layer, s_font);
+    fonts_unload_custom_font(old_font);
+  }
+  prv_place_layers(show_time);
+  prv_layout();
+  prv_scroll_to(old_offset * s_content_height / old_height, false);
+}
 
-  GFont old_font = s_font;
+static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
   Settings settings;
   settings_load(&settings);
   int size = settings_next_enabled_size(settings.size_mask, SETTINGS_SIZES[s_font_index]);
-  s_font_index = settings_size_index(size);
-  s_font = fonts_load_custom_font(resource_get_handle(FONT_RESOURCES[s_font_index]));
   storage_write_text_size(size);
+  prv_apply_appearance(size, settings.show_time);
   // The settings page shows the size the watch uses.
   transfer_send_state();
-  prv_layout();
-  fonts_unload_custom_font(old_font);
-
-  // Stay at the same relative position in the text.
-  prv_scroll_to(old_offset * s_content_height / old_height, false);
 }
 
 // Called after the scroll layer has set up its own Up and Down handlers, which this replaces.
@@ -255,14 +275,12 @@ static void prv_window_load(Window *window) {
   s_font_index = settings_size_index(size);
   s_font = fonts_load_custom_font(resource_get_handle(FONT_RESOURCES[s_font_index]));
 
-  // The status bar shows the current time. The text, the scrolling by screens and the
-  // progress indicator use only the area below it.
+  // The status bar shows the current time. With it, the text, the scrolling by screens
+  // and the progress indicator use only the area below it; see ``prv_place_layers``.
   s_status_bar = status_bar_layer_create();
   status_bar_layer_set_colors(s_status_bar, GColorWhite, GColorBlack);
   status_bar_layer_set_separator_mode(s_status_bar, StatusBarLayerSeparatorModeDotted);
   layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
-  bounds.origin.y = STATUS_BAR_LAYER_HEIGHT;
-  bounds.size.h -= STATUS_BAR_LAYER_HEIGHT;
 
   s_scroll_layer = scroll_layer_create(bounds);
   scroll_layer_set_shadow_hidden(s_scroll_layer, true);
@@ -285,11 +303,11 @@ static void prv_window_load(Window *window) {
   text_layer_set_overflow_mode(s_text_layer, GTextOverflowModeWordWrap);
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_text_layer));
 
-  s_indicator_layer = layer_create(GRect(bounds.size.w - INDICATOR_WIDTH, bounds.origin.y,
-                                         INDICATOR_WIDTH, bounds.size.h));
+  s_indicator_layer = layer_create(GRectZero);
   layer_set_update_proc(s_indicator_layer, prv_indicator_update_proc);
   layer_add_child(window_layer, s_indicator_layer);
 
+  prv_place_layers(settings.show_time);
   prv_reload();
 }
 
@@ -325,4 +343,14 @@ void text_window_handle_text_changed(int text) {
   if (s_window && text == s_text_index) {
     prv_reload();
   }
+}
+
+void text_window_apply_settings(void) {
+  if (!s_window || !window_is_loaded(s_window)) {
+    return;
+  }
+  Settings settings;
+  settings_load(&settings);
+  // ``settings_save`` has already moved a turned-off size to the nearest enabled one.
+  prv_apply_appearance(settings_text_size(), settings.show_time);
 }

@@ -10,8 +10,9 @@ static void prv_text_changed(int text) {
   text_window_handle_text_changed(text);
 }
 
-// New settings take effect when a window is opened again.
 static void prv_settings_changed(void) {
+  menu_window_apply_settings();
+  text_window_apply_settings();
 }
 
 int main(void) {

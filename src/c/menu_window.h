@@ -8,3 +8,5 @@ void menu_window_destroy(void);
 
 // Rebuilds the list after a text was stored or cleared.
 void menu_window_reload(void);
+// Applies new appearance settings to the list.
+void menu_window_apply_settings(void);

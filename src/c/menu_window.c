@@ -1,11 +1,16 @@
 #include "menu_window.h"
 
+#include "settings.h"
 #include "storage.h"
 #include "text_window.h"
 
 #define ROW_MARGIN 6
-#define ROW_HEIGHT 44
-#define ROW_WITH_NOTICE_HEIGHT 64
+// Space above the name and below it; the box for the name is a few pixels taller than
+// the font so that accents and descenders are not cut.
+#define ROW_TOP 4
+#define ROW_BOTTOM 12
+#define NAME_BOX_EXTRA 8
+#define NOTICE_HEIGHT 20
 
 static Window *s_window;
 static StatusBarLayer *s_status_bar;
@@ -13,6 +18,7 @@ static MenuLayer *s_menu_layer;
 static TextLayer *s_empty_layer;
 // The system menu font has no Ukrainian letters, so rows are drawn with DejaVu.
 static GFont s_title_font;
+static int s_title_size;
 static GFont s_notice_font;
 
 // The texts in the menu, in slot order: stored ones and ones whose transfer broke off.
@@ -61,7 +67,8 @@ static uint16_t prv_get_num_rows(MenuLayer *menu_layer, uint16_t section, void *
 }
 
 static int16_t prv_get_cell_height(MenuLayer *menu_layer, MenuIndex *index, void *context) {
-  return s_row_info[index->row].incomplete ? ROW_WITH_NOTICE_HEIGHT : ROW_HEIGHT;
+  int16_t height = ROW_TOP + s_title_size + ROW_BOTTOM;
+  return s_row_info[index->row].incomplete ? height + NOTICE_HEIGHT : height;
 }
 
 static void prv_draw_row(GContext *ctx, const Layer *cell_layer, MenuIndex *index, void *context) {
@@ -75,10 +82,13 @@ static void prv_draw_row(GContext *ctx, const Layer *cell_layer, MenuIndex *inde
     snprintf(fallback, sizeof(fallback), "Text %d", s_row_text[index->row] + 1);
     title = fallback;
   }
-  graphics_draw_text(ctx, title, s_title_font, GRect(ROW_MARGIN, 4, width, 32),
+  graphics_draw_text(ctx, title, s_title_font,
+                     GRect(ROW_MARGIN, ROW_TOP, width, s_title_size + NAME_BOX_EXTRA),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   if (info->incomplete) {
-    graphics_draw_text(ctx, "Transfer incomplete", s_notice_font, GRect(ROW_MARGIN, 36, width, 24),
+    int16_t y = ROW_TOP + s_title_size + ROW_BOTTOM - 4;
+    graphics_draw_text(ctx, "Transfer incomplete", s_notice_font,
+                       GRect(ROW_MARGIN, y, width, NOTICE_HEIGHT),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   }
 }
@@ -87,20 +97,46 @@ static void prv_select_click(MenuLayer *menu_layer, MenuIndex *index, void *cont
   text_window_push(s_row_text[index->row]);
 }
 
+static void prv_load_title_font(int size) {
+  static const uint32_t RESOURCES[SETTINGS_SIZE_COUNT] = {
+    RESOURCE_ID_FONT_DEJAVU_14, RESOURCE_ID_FONT_DEJAVU_18,
+    RESOURCE_ID_FONT_DEJAVU_20, RESOURCE_ID_FONT_DEJAVU_24,
+  };
+  if (s_title_font && size == s_title_size) {
+    return;
+  }
+  if (s_title_font) {
+    fonts_unload_custom_font(s_title_font);
+  }
+  s_title_size = size;
+  s_title_font = fonts_load_custom_font(resource_get_handle(RESOURCES[settings_size_index(size)]));
+}
+
+// Applies the stored settings: the size of the names and whether the time is shown.
+static void prv_apply_settings(void) {
+  Settings settings;
+  settings_load(&settings);
+  prv_load_title_font(settings.menu_size);
+  GRect bounds = layer_get_bounds(window_get_root_layer(s_window));
+  int16_t top = settings.show_time ? STATUS_BAR_LAYER_HEIGHT : 0;
+  layer_set_hidden(status_bar_layer_get_layer(s_status_bar), !settings.show_time);
+  layer_set_frame(menu_layer_get_layer(s_menu_layer),
+                  GRect(0, top, bounds.size.w, bounds.size.h - top));
+  layer_set_frame(text_layer_get_layer(s_empty_layer),
+                  GRect(4, top + (bounds.size.h - top) / 2 - 32, bounds.size.w - 8, 64));
+}
+
 static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
-  s_title_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_DEJAVU_24));
-  s_notice_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_DEJAVU_18));
+  s_notice_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_DEJAVU_14));
 
   // The status bar shows the current time on its own.
   s_status_bar = status_bar_layer_create();
   status_bar_layer_set_colors(s_status_bar, GColorWhite, GColorBlack);
   status_bar_layer_set_separator_mode(s_status_bar, StatusBarLayerSeparatorModeDotted);
   layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
-  bounds.origin.y = STATUS_BAR_LAYER_HEIGHT;
-  bounds.size.h -= STATUS_BAR_LAYER_HEIGHT;
 
   s_menu_layer = menu_layer_create(bounds);
   menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks) {
@@ -112,13 +148,13 @@ static void prv_window_load(Window *window) {
   menu_layer_set_click_config_onto_window(s_menu_layer, window);
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
 
-  s_empty_layer = text_layer_create(GRect(4, bounds.origin.y + bounds.size.h / 2 - 32,
-                                           bounds.size.w - 8, 64));
+  s_empty_layer = text_layer_create(GRectZero);
   text_layer_set_font(s_empty_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_empty_layer, GTextAlignmentCenter);
   text_layer_set_text(s_empty_layer, "Paste text in settings on your phone");
   layer_add_child(window_layer, text_layer_get_layer(s_empty_layer));
 
+  prv_apply_settings();
   prv_load_rows();
   menu_layer_reload_data(s_menu_layer);
   s_stored_selection = storage_read_menu_text(0);
@@ -142,6 +178,7 @@ static void prv_window_unload(Window *window) {
   status_bar_layer_destroy(s_status_bar);
   fonts_unload_custom_font(s_notice_font);
   fonts_unload_custom_font(s_title_font);
+  s_title_font = NULL;
 }
 
 void menu_window_push(void) {
@@ -164,4 +201,11 @@ void menu_window_reload(void) {
   menu_layer_reload_data(s_menu_layer);
   prv_select_text(text);
   prv_update_empty_state();
+}
+
+void menu_window_apply_settings(void) {
+  int text = prv_selected_text();
+  prv_apply_settings();
+  menu_layer_reload_data(s_menu_layer);
+  prv_select_text(text);
 }
