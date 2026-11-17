@@ -18,7 +18,7 @@ typedef struct {
   uint32_t total_bytes;
   // True if a transfer of a new version was started and never finished.
   bool incomplete;
-  // Name of the stored version or, if there is none, of the unfinished one.
+  // Name of the stored version or, if it is empty, of the unfinished one.
   char name[STORAGE_NAME_MAX_BYTES + 1];
 } StorageTextInfo;
 
@@ -49,3 +49,7 @@ typedef struct {
 
 bool storage_read_position(int text, StoragePosition *position);
 void storage_write_position(int text, const StoragePosition *position);
+
+// The text that was selected in the menu last time.
+int storage_read_menu_text(int default_text);
+void storage_write_menu_text(int text);

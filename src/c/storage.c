@@ -8,6 +8,7 @@
 // One key per text, the text index is added to the base.
 #define KEY_ACTIVE_SIDE_BASE 10
 #define KEY_POSITION_BASE 20
+#define KEY_MENU_TEXT 30
 
 #define SCHEMA_VERSION 2
 #define SIDE_NONE 0
@@ -229,7 +230,8 @@ void storage_get_info(int text, StorageTextInfo *info) {
   if (prv_read_header(text, prv_inactive_side(text), &header) &&
       header.state == STATE_IN_PROGRESS) {
     info->incomplete = true;
-    if (!has_active) {
+    // Without a stored text, emptied or never sent, the unfinished one gives the name.
+    if (info->total_bytes == 0) {
       memcpy(info->name, header.name, sizeof(info->name));
     }
   }
@@ -279,4 +281,13 @@ bool storage_read_position(int text, StoragePosition *position) {
 
 void storage_write_position(int text, const StoragePosition *position) {
   persist_write_data(KEY_POSITION_BASE + text, position, sizeof(*position));
+}
+
+int storage_read_menu_text(int default_text) {
+  int text = persist_exists(KEY_MENU_TEXT) ? persist_read_int(KEY_MENU_TEXT) : default_text;
+  return (text >= 0 && text < STORAGE_TEXT_COUNT) ? text : default_text;
+}
+
+void storage_write_menu_text(int text) {
+  persist_write_int(KEY_MENU_TEXT, text);
 }

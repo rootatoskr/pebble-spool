@@ -68,8 +68,8 @@ static void prv_scroll_to(int32_t offset, bool animated) {
   scroll_layer_set_content_offset(s_scroll_layer, GPoint(0, offset), animated);
 }
 
-// Remembers the place for the next launch. Called when the window goes away and again
-// on exit, when the layers may already be destroyed, so it must not touch them.
+// Remembers the place for the next launch. Called when the window goes away: when it is
+// closed and when the app exits.
 static void prv_save_position(void) {
   StoragePosition position = {
     .transfer_id = s_transfer_id,
@@ -211,6 +211,31 @@ static void prv_click_config_provider(void *context) {
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, prv_select_long_click_handler, NULL);
 }
 
+// Shows the text that is in storage. Returns to the remembered place if it belongs to
+// this text; a new text has another transfer id and starts from the top.
+static void prv_reload(void) {
+  // Free the old text first so that two copies never have to fit in the heap.
+  text_layer_set_text(s_text_layer, "");
+  free(s_text);
+  s_text = storage_load_text(s_text_index);
+  StorageTextInfo info;
+  storage_get_info(s_text_index, &info);
+  s_transfer_id = info.transfer_id;
+  s_show_notice = info.incomplete;
+  prv_layout();
+
+  int32_t offset = 0;
+  if (storage_read_position(s_text_index, &s_stored_position) &&
+      s_stored_position.transfer_id == s_transfer_id &&
+      s_stored_position.content_height > 0) {
+    // The same scaling as on a font change; ``prv_scroll_to`` keeps it inside the content.
+    offset = s_stored_position.offset * s_content_height / s_stored_position.content_height;
+  } else {
+    s_stored_position = (StoragePosition) {0};
+  }
+  prv_scroll_to(offset, false);
+}
+
 static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
@@ -247,7 +272,7 @@ static void prv_window_load(Window *window) {
   layer_set_update_proc(s_indicator_layer, prv_indicator_update_proc);
   layer_add_child(window_layer, s_indicator_layer);
 
-  text_window_reload();
+  prv_reload();
 }
 
 static void prv_window_disappear(Window *window) {
@@ -260,9 +285,14 @@ static void prv_window_unload(Window *window) {
   text_layer_destroy(s_notice_layer);
   scroll_layer_destroy(s_scroll_layer);
   fonts_unload_custom_font(s_font);
+  free(s_text);
+  s_text = NULL;
+  window_destroy(window);
+  s_window = NULL;
 }
 
-void text_window_push(void) {
+void text_window_push(int text) {
+  s_text_index = text;
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = prv_window_load,
@@ -272,40 +302,8 @@ void text_window_push(void) {
   window_stack_push(s_window, true);
 }
 
-void text_window_destroy(void) {
-  prv_save_position();
-  window_destroy(s_window);
-  free(s_text);
-  s_text = NULL;
-}
-
 void text_window_handle_text_changed(int text) {
-  if (text == s_text_index) {
-    text_window_reload();
+  if (s_window && text == s_text_index) {
+    prv_reload();
   }
-}
-
-// Shows the text that is in storage. Returns to the remembered place if it belongs to
-// this text; a new text has another transfer id and starts from the top.
-void text_window_reload(void) {
-  // Free the old text first so that two copies never have to fit in the heap.
-  text_layer_set_text(s_text_layer, "");
-  free(s_text);
-  s_text = storage_load_text(s_text_index);
-  StorageTextInfo info;
-  storage_get_info(s_text_index, &info);
-  s_transfer_id = info.transfer_id;
-  s_show_notice = info.incomplete;
-  prv_layout();
-
-  int32_t offset = 0;
-  if (storage_read_position(s_text_index, &s_stored_position) &&
-      s_stored_position.transfer_id == s_transfer_id &&
-      s_stored_position.content_height > 0) {
-    // The same scaling as on a font change; ``prv_scroll_to`` keeps it inside the content.
-    offset = s_stored_position.offset * s_content_height / s_stored_position.content_height;
-  } else {
-    s_stored_position = (StoragePosition) {0};
-  }
-  prv_scroll_to(offset, false);
 }
