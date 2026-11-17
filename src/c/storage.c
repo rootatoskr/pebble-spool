@@ -1,7 +1,8 @@
 #include "storage.h"
 
 #define KEY_SCHEMA_VERSION 1
-#define KEY_FONT_INDEX 2
+// Schema 2 and earlier kept the font as an index: 0 for 18 px, 1 for 24 px, 2 for 32 px.
+#define KEY_V2_FONT_INDEX 2
 // Schema 1 had a single text: its active side and its reading position.
 #define KEY_V1_ACTIVE_SIDE 3
 #define KEY_V1_POSITION 4
@@ -9,8 +10,9 @@
 #define KEY_ACTIVE_SIDE_BASE 10
 #define KEY_POSITION_BASE 20
 #define KEY_MENU_TEXT 30
+#define KEY_TEXT_SIZE 31
 
-#define SCHEMA_VERSION 2
+#define SCHEMA_VERSION 3
 #define SIDE_NONE 0
 // Side ``s`` (1 or 2) of text ``t`` keeps its header under ``SIDE_KEY_STEP * (2 * t + s)``
 // and its pieces under the keys after it. For text 0 these are the keys of schema 1.
@@ -141,15 +143,38 @@ static void prv_clean_up_v1(void) {
   persist_delete(KEY_V1_POSITION);
 }
 
+// The font is stored as its size in pixels now. 32 px is gone and becomes 24 px.
+// Older versions did not store a font that was never changed: that was 24 px, so it
+// stays 24 px, and only a new installation starts with the new default.
+// Runs again without harm if it was interrupted.
+static void prv_migrate_font_index(void) {
+  static const int SIZES[] = {18, 24, 24};
+  int index = persist_exists(KEY_V2_FONT_INDEX) ? persist_read_int(KEY_V2_FONT_INDEX) : 1;
+  if (index < 0 || index >= (int)ARRAY_LENGTH(SIZES)) {
+    index = 1;
+  }
+  persist_write_int(KEY_TEXT_SIZE, SIZES[index]);
+}
+
+// Each migration writes the new keys first, then the schema number, and removes the
+// old keys only after that: an interrupted migration is finished on the next launch.
 void storage_init(void) {
-  if (persist_read_int(KEY_SCHEMA_VERSION) != SCHEMA_VERSION) {
-    if (persist_exists(KEY_V1_ACTIVE_SIDE)) {
+  int schema = persist_read_int(KEY_SCHEMA_VERSION);
+  if (schema != SCHEMA_VERSION) {
+    if (schema < 2 && persist_exists(KEY_V1_ACTIVE_SIDE)) {
       prv_migrate_from_v1();
+    }
+    // Schema 1 and 2 are installations of an older version, 0 is a new one.
+    if (schema >= 1 && schema < 3) {
+      prv_migrate_font_index();
     }
     persist_write_int(KEY_SCHEMA_VERSION, SCHEMA_VERSION);
   }
   if (persist_exists(KEY_V1_ACTIVE_SIDE) || persist_exists(KEY_V1_POSITION)) {
     prv_clean_up_v1();
+  }
+  if (persist_exists(KEY_V2_FONT_INDEX)) {
+    persist_delete(KEY_V2_FONT_INDEX);
   }
 }
 
@@ -266,12 +291,12 @@ char *storage_load_text(int text) {
   return buffer;
 }
 
-int storage_read_font_index(int default_index) {
-  return persist_exists(KEY_FONT_INDEX) ? persist_read_int(KEY_FONT_INDEX) : default_index;
+int storage_read_text_size(int default_size) {
+  return persist_exists(KEY_TEXT_SIZE) ? persist_read_int(KEY_TEXT_SIZE) : default_size;
 }
 
-void storage_write_font_index(int index) {
-  persist_write_int(KEY_FONT_INDEX, index);
+void storage_write_text_size(int size) {
+  persist_write_int(KEY_TEXT_SIZE, size);
 }
 
 bool storage_read_position(int text, StoragePosition *position) {

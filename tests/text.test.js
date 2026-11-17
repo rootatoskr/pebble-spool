@@ -70,7 +70,7 @@ test('normalizeText keeps exactly the characters of the font characterRegex', fu
   var fonts = media.filter(function(item) {
     return item.type === 'font';
   });
-  assert.strictEqual(fonts.length, 3);
+  assert.strictEqual(fonts.length, 4);
   fonts.forEach(function(font) {
     assert.strictEqual(font.characterRegex, fonts[0].characterRegex);
   });

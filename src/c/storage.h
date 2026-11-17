@@ -36,8 +36,9 @@ void storage_get_info(int text, StorageTextInfo *info);
 // Returns the text in a ``malloc``-ed buffer, or NULL if it is empty.
 char *storage_load_text(int text);
 
-int storage_read_font_index(int default_index);
-void storage_write_font_index(int index);
+// Text size in pixels. The caller checks that it is one of the available fonts.
+int storage_read_text_size(int default_size);
+void storage_write_text_size(int size);
 
 // Where the user stopped reading. The offset is kept together with the content height
 // it belongs to, so that it can be scaled when the font size is different on return.
