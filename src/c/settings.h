@@ -14,6 +14,10 @@ typedef struct {
   uint8_t size_mask;
   // The size of the names in the menu, one of ``SETTINGS_SIZES``.
   int menu_size;
+  // White on black instead of black on white, everywhere in the app.
+  bool invert;
+  // Up and Down scroll by small animated steps instead of by screens.
+  bool smooth_scroll;
 } Settings;
 
 // Reads the settings, with the defaults for anything missing or invalid.

@@ -19,7 +19,13 @@ function fakeStorage(initial) {
   };
 }
 
-var DEFAULTS = {showTime: true, sizes: [14, 18, 20, 24], menuSize: 18};
+var DEFAULTS = {showTime: true, sizes: [14, 18, 20, 24], menuSize: 18, invert: false,
+  scrollMode: 'screen'};
+
+// Full settings with the given fields changed.
+function settingsWith(fields) {
+  return Object.assign({}, DEFAULTS, fields);
+}
 
 test('the sizes match the fonts in package.json', function() {
   var fonts = require('../package.json').pebble.resources.media.filter(function(item) {
@@ -48,7 +54,7 @@ test('normalizeSettings fills in defaults and drops invalid values', function() 
   assert.deepStrictEqual(sync.normalizeSettings(null), DEFAULTS);
   assert.deepStrictEqual(sync.normalizeSettings({}), DEFAULTS);
   assert.deepStrictEqual(sync.normalizeSettings({showTime: false, sizes: [24, 14], menuSize: 20}),
-    {showTime: false, sizes: [14, 24], menuSize: 20});
+    settingsWith({showTime: false, sizes: [14, 24], menuSize: 20}));
   // At least one size always stays.
   assert.deepStrictEqual(sync.normalizeSettings({sizes: []}).sizes, [14, 18, 20, 24]);
   assert.deepStrictEqual(sync.normalizeSettings({sizes: [32, 16]}).sizes, [14, 18, 20, 24]);
@@ -57,7 +63,8 @@ test('normalizeSettings fills in defaults and drops invalid values', function() 
 
 test('settingsMessage encodes the settings with declared keys', function() {
   var message = sync.settingsMessage({showTime: false, sizes: [18, 20], menuSize: 24});
-  assert.deepStrictEqual(message, {ShowTime: 0, SizeMask: 6, MenuSize: 24});
+  assert.deepStrictEqual(message,
+    {ShowTime: 0, SizeMask: 6, MenuSize: 24, Invert: 0, ScrollMode: 0});
   var declared = require('../package.json').pebble.messageKeys;
   Object.keys(message).concat(['TextSize']).forEach(function(key) {
     assert.ok(declared.indexOf(key) >= 0, key);
@@ -66,10 +73,10 @@ test('settingsMessage encodes the settings with declared keys', function() {
 
 test('stateFromPayload reads ids, settings and text size', function() {
   var payload = {SlotId0: 1, SlotId1: 0, SlotId2: 3, SlotId3: 0, SlotId4: 5,
-    ShowTime: 0, SizeMask: 9, MenuSize: 20, TextSize: 24};
+    ShowTime: 0, SizeMask: 9, MenuSize: 20, Invert: 1, ScrollMode: 1, TextSize: 24};
   assert.deepStrictEqual(sync.stateFromPayload(payload), {
     ids: [1, 0, 3, 0, 5],
-    settings: {showTime: false, sizes: [14, 24], menuSize: 20},
+    settings: {showTime: false, sizes: [14, 24], menuSize: 20, invert: true, scrollMode: 'smooth'},
     textSize: 24
   });
 });
@@ -89,7 +96,7 @@ test('stateFromPayload ignores an unknown text size', function() {
 
 test('takeWatchSettings adopts the watch settings without a pending change', function() {
   var storage = fakeStorage({});
-  var watch = {showTime: false, sizes: [18], menuSize: 14};
+  var watch = settingsWith({showTime: false, sizes: [18], menuSize: 14});
   assert.strictEqual(sync.takeWatchSettings(storage, watch, 18), false);
   assert.deepStrictEqual(sync.readSettings(storage, 'settings'), watch);
   assert.strictEqual(storage.getItem('settingsState'), 'synced');
@@ -97,7 +104,7 @@ test('takeWatchSettings adopts the watch settings without a pending change', fun
 });
 
 test('takeWatchSettings asks to resend a change that has not arrived', function() {
-  var wanted = {showTime: false, sizes: [20, 24], menuSize: 24};
+  var wanted = settingsWith({showTime: false, sizes: [20, 24], menuSize: 24, invert: true});
   ['pending', 'failed'].forEach(function(state) {
     var storage = fakeStorage({settings: JSON.stringify(wanted), settingsState: state});
     assert.strictEqual(sync.takeWatchSettings(storage, DEFAULTS, 20), true);
@@ -116,8 +123,8 @@ test('takeWatchSettings marks a change as delivered when the watch has it', func
 test('pageSettings prefers the wanted settings, then the watch ones, then defaults', function() {
   assert.deepStrictEqual(sync.pageSettings(fakeStorage({})),
     {settings: DEFAULTS, textSize: null, failed: false});
-  var watch = {showTime: false, sizes: [14], menuSize: 14};
-  var wanted = {showTime: true, sizes: [24], menuSize: 24};
+  var watch = settingsWith({showTime: false, sizes: [14], menuSize: 14});
+  var wanted = settingsWith({sizes: [24], menuSize: 24, scrollMode: 'smooth'});
   assert.deepStrictEqual(sync.pageSettings(fakeStorage({
     watchSettings: JSON.stringify(watch), textSize: '14'
   })), {settings: watch, textSize: 14, failed: false});
@@ -139,4 +146,41 @@ test('the settings always go first in the queue, texts right after them', functi
   var withoutSettings = [3];
   sync.queueAdd(withoutSettings, 0, true);
   assert.deepStrictEqual(withoutSettings, [0, 3]);
+});
+
+test('normalizeSettings gives invert and scrollMode their defaults', function() {
+  var old = sync.normalizeSettings({showTime: false, sizes: [18], menuSize: 20});
+  assert.strictEqual(old.invert, false);
+  assert.strictEqual(old.scrollMode, 'screen');
+  assert.strictEqual(sync.normalizeSettings({invert: 1}).invert, false);
+  assert.strictEqual(sync.normalizeSettings({scrollMode: 'fast'}).scrollMode, 'screen');
+  assert.strictEqual(sync.normalizeSettings({invert: true, scrollMode: 'smooth'}).invert, true);
+  assert.strictEqual(sync.normalizeSettings({invert: true, scrollMode: 'smooth'}).scrollMode,
+    'smooth');
+});
+
+test('settingsMessage encodes invert and scrollMode as 0 or 1', function() {
+  var message = sync.settingsMessage({invert: true, scrollMode: 'smooth'});
+  assert.strictEqual(message.Invert, 1);
+  assert.strictEqual(message.ScrollMode, 1);
+  var declared = require('../package.json').pebble.messageKeys;
+  ['Invert', 'ScrollMode'].forEach(function(key) {
+    assert.ok(declared.indexOf(key) >= 0, key);
+  });
+});
+
+test('stateFromPayload of a watch without the new settings gives their defaults', function() {
+  var payload = {SlotId0: 0, SlotId1: 0, SlotId2: 0, SlotId3: 0, SlotId4: 0,
+    ShowTime: 1, SizeMask: 15, MenuSize: 18, TextSize: 20};
+  var settings = sync.stateFromPayload(payload).settings;
+  assert.strictEqual(settings.invert, false);
+  assert.strictEqual(settings.scrollMode, 'screen');
+});
+
+test('settings saved by version 1.3 compare equal to the same settings with defaults', function() {
+  var storage = fakeStorage({settings: JSON.stringify({showTime: false, sizes: [18], menuSize: 20})});
+  var stored = sync.readSettings(storage, 'settings');
+  assert.ok(sync.settingsEqual(stored, settingsWith({showTime: false, sizes: [18], menuSize: 20})));
+  assert.ok(!sync.settingsEqual(stored,
+    settingsWith({showTime: false, sizes: [18], menuSize: 20, invert: true})));
 });

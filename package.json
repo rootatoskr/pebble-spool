@@ -29,6 +29,8 @@
       "ShowTime",
       "SizeMask",
       "MenuSize",
+      "Invert",
+      "ScrollMode",
       "TextSize",
       "TransferId",
       "Slot",

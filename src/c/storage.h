@@ -52,12 +52,18 @@ bool storage_read_position(int text, StoragePosition *position);
 void storage_write_position(int text, const StoragePosition *position);
 
 // The appearance settings as stored. ``settings.c`` checks them and fills in defaults.
+// New fields go at the end and have 0 as their default: a record written by an older
+// version is shorter and its missing fields read as 0.
 typedef struct {
   uint8_t show_time;
   uint8_t size_mask;
   uint8_t menu_size;
+  // Since version 1.4.
+  uint8_t invert;
+  uint8_t smooth_scroll;
 } StorageSettings;
 
+// False if there are no stored settings.
 bool storage_read_settings(StorageSettings *settings);
 void storage_write_settings(const StorageSettings *settings);
 

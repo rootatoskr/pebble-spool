@@ -52,6 +52,8 @@ void transfer_send_state(void) {
   dict_write_uint8(iter, MESSAGE_KEY_ShowTime, settings.show_time ? 1 : 0);
   dict_write_uint8(iter, MESSAGE_KEY_SizeMask, settings.size_mask);
   dict_write_uint8(iter, MESSAGE_KEY_MenuSize, settings.menu_size);
+  dict_write_uint8(iter, MESSAGE_KEY_Invert, settings.invert ? 1 : 0);
+  dict_write_uint8(iter, MESSAGE_KEY_ScrollMode, settings.smooth_scroll ? 1 : 0);
   dict_write_uint8(iter, MESSAGE_KEY_TextSize,
                    settings_nearest_enabled_size(settings.size_mask, settings_text_size()));
   app_message_outbox_send();
@@ -61,6 +63,8 @@ static void prv_handle_settings(DictionaryIterator *iter) {
   Tuple *show_time_t = dict_find(iter, MESSAGE_KEY_ShowTime);
   Tuple *size_mask_t = dict_find(iter, MESSAGE_KEY_SizeMask);
   Tuple *menu_size_t = dict_find(iter, MESSAGE_KEY_MenuSize);
+  Tuple *invert_t = dict_find(iter, MESSAGE_KEY_Invert);
+  Tuple *scroll_mode_t = dict_find(iter, MESSAGE_KEY_ScrollMode);
   if (!show_time_t || !size_mask_t || !menu_size_t) {
     return;
   }
@@ -68,6 +72,8 @@ static void prv_handle_settings(DictionaryIterator *iter) {
     .show_time = show_time_t->value->int32 != 0,
     .size_mask = size_mask_t->value->int32 & ((1 << SETTINGS_SIZE_COUNT) - 1),
     .menu_size = menu_size_t->value->int32,
+    .invert = invert_t && invert_t->value->int32 != 0,
+    .smooth_scroll = scroll_mode_t && scroll_mode_t->value->int32 != 0,
   };
   if (settings.size_mask == 0 || settings_size_index(settings.menu_size) < 0) {
     return;
@@ -166,8 +172,8 @@ void transfer_init(TransferTextChangedHandler text_handler,
   s_settings_changed_handler = settings_handler;
   app_message_register_inbox_received(prv_inbox_received_handler);
   // The inbox fits one chunk message: five integers, the name and the chunk itself.
-  // The largest reply is the state: one id for every text and four small numbers.
+  // The largest reply is the state: one id for every text and six small numbers.
   app_message_open(dict_calc_buffer_size(7, 4, 4, 4, 4, 4, STORAGE_NAME_MAX_BYTES + 1,
                                          CHUNK_MAX_BYTES + 1),
-                   dict_calc_buffer_size(STORAGE_TEXT_COUNT + 4, 4, 4, 4, 4, 4, 1, 1, 1, 1));
+                   dict_calc_buffer_size(STORAGE_TEXT_COUNT + 6, 4, 4, 4, 4, 4, 1, 1, 1, 1, 1, 1));
 }

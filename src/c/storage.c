@@ -310,8 +310,17 @@ void storage_write_position(int text, const StoragePosition *position) {
   persist_write_data(KEY_POSITION_BASE + text, position, sizeof(*position));
 }
 
+// Version 1.3 wrote the first three fields only.
+#define SETTINGS_MIN_BYTES 3
+
 bool storage_read_settings(StorageSettings *settings) {
-  return persist_read_data(KEY_SETTINGS, settings, sizeof(*settings)) == (int)sizeof(*settings);
+  *settings = (StorageSettings) {0};
+  int read = persist_read_data(KEY_SETTINGS, settings, sizeof(*settings));
+  if (read < SETTINGS_MIN_BYTES) {
+    *settings = (StorageSettings) {0};
+    return false;
+  }
+  return true;
 }
 
 void storage_write_settings(const StorageSettings *settings) {

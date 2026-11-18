@@ -34,6 +34,8 @@ void settings_load(Settings *settings) {
   }
   settings->menu_size = settings_size_index(stored.menu_size) >= 0 ? stored.menu_size
                                                                   : DEFAULT_MENU_SIZE;
+  settings->invert = stored.invert != 0;
+  settings->smooth_scroll = stored.smooth_scroll != 0;
 }
 
 void settings_save(const Settings *settings) {
@@ -41,6 +43,8 @@ void settings_save(const Settings *settings) {
     .show_time = settings->show_time ? 1 : 0,
     .size_mask = settings->size_mask,
     .menu_size = settings->menu_size,
+    .invert = settings->invert ? 1 : 0,
+    .smooth_scroll = settings->smooth_scroll ? 1 : 0,
   };
   storage_write_settings(&stored);
   int size = settings_text_size();

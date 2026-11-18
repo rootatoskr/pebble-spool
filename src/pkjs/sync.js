@@ -54,7 +54,9 @@ function localIds(storage) {
 }
 
 // Appearance settings: ``showTime``, ``sizes`` (the sizes that holding Select cycles
-// through, never empty) and ``menuSize``. Anything invalid becomes the default.
+// through, never empty), ``menuSize``, ``invert`` and ``scrollMode`` ('screen' or
+// 'smooth'). Anything invalid or missing, as in settings from version 1.3, becomes
+// the default.
 function normalizeSettings(settings) {
   settings = settings || {};
   var sizes = SIZES.filter(function(size) {
@@ -63,7 +65,9 @@ function normalizeSettings(settings) {
   return {
     showTime: settings.showTime !== false,
     sizes: sizes.length > 0 ? sizes : SIZES.slice(),
-    menuSize: SIZES.indexOf(settings.menuSize) >= 0 ? settings.menuSize : DEFAULT_MENU_SIZE
+    menuSize: SIZES.indexOf(settings.menuSize) >= 0 ? settings.menuSize : DEFAULT_MENU_SIZE,
+    invert: settings.invert === true,
+    scrollMode: settings.scrollMode === 'smooth' ? 'smooth' : 'screen'
   };
 }
 
@@ -93,7 +97,9 @@ function settingsMessage(settings) {
   return {
     'ShowTime': settings.showTime ? 1 : 0,
     'SizeMask': encodeSizeMask(settings.sizes),
-    'MenuSize': settings.menuSize
+    'MenuSize': settings.menuSize,
+    'Invert': settings.invert ? 1 : 0,
+    'ScrollMode': settings.scrollMode === 'smooth' ? 1 : 0
   };
 }
 
@@ -165,7 +171,9 @@ function stateFromPayload(payload) {
     state.settings = normalizeSettings({
       showTime: payload.ShowTime !== 0,
       sizes: decodeSizeMask(payload.SizeMask),
-      menuSize: payload.MenuSize
+      menuSize: payload.MenuSize,
+      invert: payload.Invert === 1,
+      scrollMode: payload.ScrollMode === 1 ? 'smooth' : 'screen'
     });
     state.textSize = SIZES.indexOf(payload.TextSize) >= 0 ? payload.TextSize : null;
   }
