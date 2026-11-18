@@ -143,6 +143,9 @@ var BODY = [
   '<div id="text-size" class="hint"></div>',
   '<label>Розмір назв у меню</label>',
   '<div id="menu-sizes"></div>',
+  '<label class="choice"><input type="checkbox" id="invert">Інвертовані кольори</label>',
+  '<label>Прокручування</label>',
+  '<div id="scroll-modes"></div>',
   '<button id="save">Зберегти</button>',
   '<button id="clear" class="secondary">Очистити</button>',
   '<div id="confirm" class="message" hidden><div id="confirm-text"></div>',
@@ -217,6 +220,26 @@ function pageMain() {
       menuLabel.appendChild(radio);
       menuLabel.appendChild(document.createTextNode(String(size)));
       menuSizes.appendChild(menuLabel);
+    });
+    var invert = document.getElementById('invert');
+    invert.checked = settings.invert;
+    invert.addEventListener('change', function() {
+      settings.invert = invert.checked;
+    });
+    var scrollModes = document.getElementById('scroll-modes');
+    [['screen', 'По екрану'], ['smooth', 'Плавно']].forEach(function(mode) {
+      var label = document.createElement('label');
+      var radio = document.createElement('input');
+      label.className = 'choice';
+      radio.type = 'radio';
+      radio.name = 'scroll-mode';
+      radio.checked = settings.scrollMode === mode[0];
+      radio.addEventListener('change', function() {
+        settings.scrollMode = mode[0];
+      });
+      label.appendChild(radio);
+      label.appendChild(document.createTextNode(mode[1]));
+      scrollModes.appendChild(label);
     });
     document.getElementById('text-size').textContent = state.appearance.textSize ?
       'Зараз на годиннику: ' + state.appearance.textSize : '';
