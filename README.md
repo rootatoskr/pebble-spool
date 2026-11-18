@@ -18,7 +18,8 @@ Written in C with the Pebble SDK; the phone side is PebbleKit JS.
    after the text appears, so a double press in the menu does not close the app. The place where reading
    stopped is remembered for every text.
 4. The appearance settings: whether the current time is shown at the top, which text
-   sizes holding Select cycles through, and the size of the names in the menu.
+   sizes holding Select cycles through, the size of the names in the menu, inverted
+   colors (white on black), and scrolling by screens or smoothly in small steps.
 
 Each text is limited to 8000 bytes of UTF-8 and its name to 32 bytes; without a name
 the first line of the text is used. Characters that the watch font does not have
