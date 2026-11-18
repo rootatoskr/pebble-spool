@@ -5,13 +5,18 @@ Written in C with the Pebble SDK; the phone side is PebbleKit JS.
 
 ## How it works
 
-1. The settings page on the phone has five tabs, each with a name and a text field.
-   Save sends the selected text to the watch, Clear removes it.
+1. The settings page on the phone has five tabs, each with a name and a text field, and
+   an Appearance block. Save sends what changed: the selected text, the appearance
+   settings or both. Clear removes the selected text.
 2. The watch stores the texts in persistent storage and shows them without the phone
-   nearby. The app starts with a menu of the stored texts.
-3. In a text, Up and Down scroll by screens and holding Select switches the font size
-   (18, 24, 32). The place where reading stopped is remembered for every text.
-4. The current time is shown at the top of the menu and of every text.
+   nearby. The app starts with a menu of the stored texts, or with the text that was
+   open when the app was left; only Back from the menu makes the next launch start
+   with the menu.
+3. In a text, Up and Down scroll by screens and holding Select switches the text size
+   among the enabled ones (14, 18, 20, 24). The place where reading stopped is
+   remembered for every text.
+4. The appearance settings: whether the current time is shown at the top, which text
+   sizes holding Select cycles through, and the size of the names in the menu.
 
 Each text is limited to 8000 bytes of UTF-8 and its name to 32 bytes; without a name
 the first line of the text is used. Characters that the watch font does not have
@@ -40,6 +45,7 @@ node --test tests/
 
 - `src/c/pebble-spool.c` - entry point
 - `src/c/menu_window.c` - the menu of stored texts
+- `src/c/settings.c` - the appearance settings and the text sizes
 - `src/c/text_window.c` - a text: scrolling, font sizes, progress, notices
 - `src/c/storage.c` - texts and settings in persistent storage, migration
 - `src/c/transfer.c` - receiving texts over AppMessage
