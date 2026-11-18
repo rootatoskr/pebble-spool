@@ -328,21 +328,35 @@ static void prv_window_unload(Window *window) {
   s_window = NULL;
 }
 
-void text_window_push(int text) {
+void text_window_push(int text, bool animated) {
   s_text_index = text;
+  // Opened again on the next launch unless the app is left with Back from the menu.
+  // Back here only returns to the menu: holding Back to exit the app also starts with
+  // a press that closes this window, so the two cannot be told apart.
+  storage_write_open_text(text);
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = prv_window_load,
     .disappear = prv_window_disappear,
     .unload = prv_window_unload,
   });
-  window_stack_push(s_window, true);
+  window_stack_push(s_window, animated);
 }
 
+
+
 void text_window_handle_text_changed(int text) {
-  if (s_window && text == s_text_index) {
-    prv_reload();
+  if (!s_window || text != s_text_index) {
+    return;
   }
+  StorageTextInfo info;
+  storage_get_info(text, &info);
+  // A text that was cleared while it is open leaves nothing to read: back to the menu.
+  if (info.total_bytes == 0 && !info.incomplete) {
+    window_stack_remove(s_window, true);
+    return;
+  }
+  prv_reload();
 }
 
 void text_window_apply_settings(void) {

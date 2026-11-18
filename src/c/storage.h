@@ -61,6 +61,10 @@ typedef struct {
 bool storage_read_settings(StorageSettings *settings);
 void storage_write_settings(const StorageSettings *settings);
 
+// The text that was open when the app was closed, or -1 if it was closed from the menu.
+int storage_read_open_text(void);
+void storage_write_open_text(int text);
+
 // The text that was selected in the menu last time.
 int storage_read_menu_text(int default_text);
 void storage_write_menu_text(int text);

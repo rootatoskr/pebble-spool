@@ -4,7 +4,7 @@
 
 // Opens stored text number ``text`` at the place where reading stopped. The window
 // destroys itself when it is closed.
-void text_window_push(int text);
+void text_window_push(int text, bool animated);
 
 // Reloads the open window if it shows ``text``.
 void text_window_handle_text_changed(int text);

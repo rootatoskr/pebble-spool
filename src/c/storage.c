@@ -12,6 +12,7 @@
 #define KEY_MENU_TEXT 30
 #define KEY_TEXT_SIZE 31
 #define KEY_SETTINGS 32
+#define KEY_OPEN_TEXT 33
 
 #define SCHEMA_VERSION 3
 #define SIDE_NONE 0
@@ -315,6 +316,19 @@ bool storage_read_settings(StorageSettings *settings) {
 
 void storage_write_settings(const StorageSettings *settings) {
   persist_write_data(KEY_SETTINGS, settings, sizeof(*settings));
+}
+
+int storage_read_open_text(void) {
+  int text = persist_exists(KEY_OPEN_TEXT) ? persist_read_int(KEY_OPEN_TEXT) : -1;
+  return (text >= 0 && text < STORAGE_TEXT_COUNT) ? text : -1;
+}
+
+void storage_write_open_text(int text) {
+  if (text < 0) {
+    persist_delete(KEY_OPEN_TEXT);
+  } else {
+    persist_write_int(KEY_OPEN_TEXT, text);
+  }
 }
 
 int storage_read_menu_text(int default_text) {

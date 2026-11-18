@@ -11,6 +11,7 @@
 #define ROW_BOTTOM 12
 #define NAME_BOX_EXTRA 8
 #define NOTICE_HEIGHT 20
+#define SELECTION_REPEAT_INTERVAL_MS 150
 
 static Window *s_window;
 static StatusBarLayer *s_status_bar;
@@ -93,8 +94,36 @@ static void prv_draw_row(GContext *ctx, const Layer *cell_layer, MenuIndex *inde
   }
 }
 
-static void prv_select_click(MenuLayer *menu_layer, MenuIndex *index, void *context) {
-  text_window_push(s_row_text[index->row]);
+static void prv_up_click_handler(ClickRecognizerRef recognizer, void *context) {
+  menu_layer_set_selected_next(s_menu_layer, true, MenuRowAlignCenter, true);
+}
+
+static void prv_down_click_handler(ClickRecognizerRef recognizer, void *context) {
+  menu_layer_set_selected_next(s_menu_layer, false, MenuRowAlignCenter, true);
+}
+
+static void prv_select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  if (s_row_count > 0) {
+    text_window_push(s_row_text[menu_layer_get_selected_index(s_menu_layer).row], true);
+  }
+}
+
+// Back from the menu is the only way out after which the next launch starts with the
+// menu; every other way out reopens the last text. Holding Back here also arrives as
+// a press first, so it clears the open text as well.
+static void prv_back_click_handler(ClickRecognizerRef recognizer, void *context) {
+  storage_write_open_text(-1);
+  window_stack_pop(true);
+}
+
+// The menu layer's own click setup has no place for Back, so it is replaced.
+static void prv_click_config_provider(void *context) {
+  window_single_repeating_click_subscribe(BUTTON_ID_UP, SELECTION_REPEAT_INTERVAL_MS,
+                                          prv_up_click_handler);
+  window_single_repeating_click_subscribe(BUTTON_ID_DOWN, SELECTION_REPEAT_INTERVAL_MS,
+                                          prv_down_click_handler);
+  window_single_click_subscribe(BUTTON_ID_SELECT, prv_select_click_handler);
+  window_single_click_subscribe(BUTTON_ID_BACK, prv_back_click_handler);
 }
 
 static void prv_load_title_font(int size) {
@@ -143,9 +172,8 @@ static void prv_window_load(Window *window) {
     .get_num_rows = prv_get_num_rows,
     .get_cell_height = prv_get_cell_height,
     .draw_row = prv_draw_row,
-    .select_click = prv_select_click,
   });
-  menu_layer_set_click_config_onto_window(s_menu_layer, window);
+  window_set_click_config_provider(window, prv_click_config_provider);
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
 
   s_empty_layer = text_layer_create(GRectZero);
@@ -181,14 +209,14 @@ static void prv_window_unload(Window *window) {
   s_title_font = NULL;
 }
 
-void menu_window_push(void) {
+void menu_window_push(bool animated) {
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = prv_window_load,
     .disappear = prv_window_disappear,
     .unload = prv_window_unload,
   });
-  window_stack_push(s_window, true);
+  window_stack_push(s_window, animated);
 }
 
 void menu_window_destroy(void) {
