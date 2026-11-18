@@ -50,6 +50,9 @@ static int16_t s_text_top;
 static int16_t s_content_height;
 // Where the content is scrolled to, or is being animated to. Not positive.
 static int32_t s_scroll_offset;
+// With smooth scrolling the scroll layer's own Up and Down handlers move the content,
+// and ``s_scroll_offset`` is not kept up to date: see ``prv_current_offset``.
+static bool s_smooth_scroll;
 // The reading position as it is in storage, to skip writes that would change nothing.
 static StoragePosition s_stored_position;
 
@@ -78,12 +81,18 @@ static void prv_scroll_to(int32_t offset, bool animated) {
   scroll_layer_set_content_offset(s_scroll_layer, GPoint(0, offset), animated);
 }
 
+// Where the content is now: the target of our own scrolling, or with smooth scrolling
+// the offset the scroll layer has reached.
+static int32_t prv_current_offset(void) {
+  return s_smooth_scroll ? scroll_layer_get_content_offset(s_scroll_layer).y : s_scroll_offset;
+}
+
 // Remembers the place for the next launch. Called when the window goes away: when it is
 // closed and when the app exits.
 static void prv_save_position(void) {
   StoragePosition position = {
     .transfer_id = s_transfer_id,
-    .offset = s_scroll_offset,
+    .offset = prv_current_offset(),
     .content_height = s_content_height,
   };
   if (memcmp(&position, &s_stored_position, sizeof(position)) != 0) {
@@ -227,7 +236,7 @@ static void prv_apply_colors(bool invert) {
 }
 
 static void prv_apply_appearance(int size, bool show_time) {
-  int32_t old_offset = s_scroll_offset;
+  int32_t old_offset = prv_current_offset();
   int32_t old_height = s_content_height;
   int index = settings_size_index(size);
   if (index != s_font_index) {
@@ -262,12 +271,15 @@ static void prv_select_click_handler(ClickRecognizerRef recognizer, void *contex
   window_stack_pop_all(false);
 }
 
-// Called after the scroll layer has set up its own Up and Down handlers, which this replaces.
+// Called after the scroll layer has set up its own Up and Down handlers. Scrolling by
+// screens replaces them; with smooth scrolling they stay.
 static void prv_click_config_provider(void *context) {
-  window_single_repeating_click_subscribe(BUTTON_ID_UP, SCROLL_REPEAT_INTERVAL_MS,
-                                          prv_up_click_handler);
-  window_single_repeating_click_subscribe(BUTTON_ID_DOWN, SCROLL_REPEAT_INTERVAL_MS,
-                                          prv_down_click_handler);
+  if (!s_smooth_scroll) {
+    window_single_repeating_click_subscribe(BUTTON_ID_UP, SCROLL_REPEAT_INTERVAL_MS,
+                                            prv_up_click_handler);
+    window_single_repeating_click_subscribe(BUTTON_ID_DOWN, SCROLL_REPEAT_INTERVAL_MS,
+                                            prv_down_click_handler);
+  }
   window_single_click_subscribe(BUTTON_ID_SELECT, prv_select_click_handler);
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, prv_select_long_click_handler, NULL);
 }
@@ -337,6 +349,7 @@ static void prv_window_load(Window *window) {
   layer_set_update_proc(s_indicator_layer, prv_indicator_update_proc);
   layer_add_child(window_layer, s_indicator_layer);
 
+  s_smooth_scroll = settings.smooth_scroll;
   prv_apply_colors(settings.invert);
   prv_place_layers(settings.show_time);
   prv_reload();
@@ -416,5 +429,12 @@ void text_window_apply_settings(void) {
   settings_load(&settings);
   // ``settings_save`` has already moved a turned-off size to the nearest enabled one.
   prv_apply_colors(settings.invert);
+  if (settings.smooth_scroll != s_smooth_scroll) {
+    // Our scrolling by screens continues from where smooth scrolling left the content.
+    s_scroll_offset = prv_current_offset();
+    s_smooth_scroll = settings.smooth_scroll;
+    // Sets up Up and Down again for the new mode.
+    scroll_layer_set_click_config_onto_window(s_scroll_layer, s_window);
+  }
   prv_apply_appearance(settings_text_size(), settings.show_time);
 }
