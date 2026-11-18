@@ -14,7 +14,8 @@ Written in C with the Pebble SDK; the phone side is PebbleKit JS.
    with the menu.
 3. In a text, Up and Down scroll by screens and holding Select switches the text size
    among the enabled ones (14, 18, 20, 24). A short Select press closes the app and
-   goes to the watchface; the next launch opens the same text. The place where reading
+   goes to the watchface; the next launch opens the same text. It is ignored for 700 ms
+   after the text appears, so a double press in the menu does not close the app. The place where reading
    stopped is remembered for every text.
 4. The appearance settings: whether the current time is shown at the top, which text
    sizes holding Select cycles through, and the size of the names in the menu.

@@ -13,6 +13,9 @@
 #define MAX_TEXT_HEIGHT 30000
 #define FONT_COUNT SETTINGS_SIZE_COUNT
 #define SCROLL_REPEAT_INTERVAL_MS 300
+// A short Select press is ignored this long after the window appears, so that a double
+// press in the menu opens the text and does not close the app right away.
+#define SELECT_EXIT_DELAY_MS 700
 
 // In the order of ``SETTINGS_SIZES``.
 static const uint32_t FONT_RESOURCES[FONT_COUNT] = {
@@ -30,6 +33,8 @@ static ScrollLayer *s_scroll_layer;
 static TextLayer *s_notice_layer;
 static TextLayer *s_text_layer;
 static Layer *s_indicator_layer;
+// Running from the moment the window appears until a short Select press may close the app.
+static AppTimer *s_select_exit_timer;
 static GFont s_font;
 static int s_font_index;
 // Which of the stored texts is shown.
@@ -234,6 +239,9 @@ static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *c
 // A short press closes the app and goes straight to the watchface. The text stays the
 // one to open on the next launch: only Back from the menu changes that.
 static void prv_select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  if (s_select_exit_timer) {
+    return;
+  }
   exit_reason_set(APP_EXIT_ACTION_PERFORMED_SUCCESSFULLY);
   window_stack_pop_all(false);
 }
@@ -319,11 +327,28 @@ static void prv_window_load(Window *window) {
   prv_reload();
 }
 
+static void prv_select_exit_timer_callback(void *data) {
+  s_select_exit_timer = NULL;
+}
+
+// Also runs when the text is reopened on launch.
+static void prv_window_appear(Window *window) {
+  if (s_select_exit_timer) {
+    app_timer_cancel(s_select_exit_timer);
+  }
+  s_select_exit_timer = app_timer_register(SELECT_EXIT_DELAY_MS, prv_select_exit_timer_callback,
+                                           NULL);
+}
+
 static void prv_window_disappear(Window *window) {
   prv_save_position();
 }
 
 static void prv_window_unload(Window *window) {
+  if (s_select_exit_timer) {
+    app_timer_cancel(s_select_exit_timer);
+    s_select_exit_timer = NULL;
+  }
   layer_destroy(s_indicator_layer);
   text_layer_destroy(s_text_layer);
   text_layer_destroy(s_notice_layer);
@@ -345,6 +370,7 @@ void text_window_push(int text, bool animated) {
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = prv_window_load,
+    .appear = prv_window_appear,
     .disappear = prv_window_disappear,
     .unload = prv_window_unload,
   });
