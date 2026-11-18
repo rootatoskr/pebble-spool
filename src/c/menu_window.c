@@ -142,10 +142,22 @@ static void prv_load_title_font(int size) {
 }
 
 // Applies the stored settings: the size of the names and whether the time is shown.
+// Black on white, or white on black with inverted colors; the selected row is the opposite.
+static void prv_apply_colors(bool invert) {
+  GColor background = invert ? GColorBlack : GColorWhite;
+  GColor foreground = invert ? GColorWhite : GColorBlack;
+  window_set_background_color(s_window, background);
+  status_bar_layer_set_colors(s_status_bar, background, foreground);
+  menu_layer_set_normal_colors(s_menu_layer, background, foreground);
+  menu_layer_set_highlight_colors(s_menu_layer, foreground, background);
+  text_layer_set_text_color(s_empty_layer, foreground);
+}
+
 static void prv_apply_settings(void) {
   Settings settings;
   settings_load(&settings);
   prv_load_title_font(settings.menu_size);
+  prv_apply_colors(settings.invert);
   GRect bounds = layer_get_bounds(window_get_root_layer(s_window));
   int16_t top = settings.show_time ? STATUS_BAR_LAYER_HEIGHT : 0;
   layer_set_hidden(status_bar_layer_get_layer(s_status_bar), !settings.show_time);
@@ -163,7 +175,6 @@ static void prv_window_load(Window *window) {
 
   // The status bar shows the current time on its own.
   s_status_bar = status_bar_layer_create();
-  status_bar_layer_set_colors(s_status_bar, GColorWhite, GColorBlack);
   status_bar_layer_set_separator_mode(s_status_bar, StatusBarLayerSeparatorModeDotted);
   layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
 
@@ -178,6 +189,7 @@ static void prv_window_load(Window *window) {
 
   s_empty_layer = text_layer_create(GRectZero);
   text_layer_set_font(s_empty_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_background_color(s_empty_layer, GColorClear);
   text_layer_set_text_alignment(s_empty_layer, GTextAlignmentCenter);
   text_layer_set_text(s_empty_layer, "Paste text in settings on your phone");
   layer_add_child(window_layer, text_layer_get_layer(s_empty_layer));

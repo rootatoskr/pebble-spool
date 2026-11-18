@@ -35,6 +35,7 @@ static TextLayer *s_text_layer;
 static Layer *s_indicator_layer;
 // Running from the moment the window appears until a short Select press may close the app.
 static AppTimer *s_select_exit_timer;
+static bool s_invert;
 static GFont s_font;
 static int s_font_index;
 // Which of the stored texts is shown.
@@ -106,7 +107,8 @@ static void prv_indicator_update_proc(Layer *layer, GContext *ctx) {
   // The actual offset, not ``s_scroll_offset``, so that the bar follows the animation.
   int32_t scrolled = -scroll_layer_get_content_offset(s_scroll_layer).y;
   int32_t y = scrolled * (frame_height - height) / (s_content_height - frame_height);
-  graphics_context_set_fill_color(ctx, GColorDarkGray);
+  // Mid gray on either background: dark on white, light on black.
+  graphics_context_set_fill_color(ctx, s_invert ? GColorLightGray : GColorDarkGray);
   graphics_fill_rect(ctx, GRect(0, y, bounds.size.w, height), 0, GCornerNone);
 }
 
@@ -210,6 +212,20 @@ static void prv_place_layers(bool show_time) {
 
 // Shows the text in ``size`` with or without the time, staying at the same relative
 // position in the text.
+// Black on white, or white on black with inverted colors. The notice bar is the opposite
+// of the text so that it stands out in both.
+static void prv_apply_colors(bool invert) {
+  GColor background = invert ? GColorBlack : GColorWhite;
+  GColor foreground = invert ? GColorWhite : GColorBlack;
+  s_invert = invert;
+  window_set_background_color(s_window, background);
+  status_bar_layer_set_colors(s_status_bar, background, foreground);
+  text_layer_set_text_color(s_text_layer, foreground);
+  text_layer_set_background_color(s_notice_layer, foreground);
+  text_layer_set_text_color(s_notice_layer, background);
+  layer_mark_dirty(s_indicator_layer);
+}
+
 static void prv_apply_appearance(int size, bool show_time) {
   int32_t old_offset = s_scroll_offset;
   int32_t old_height = s_content_height;
@@ -294,7 +310,6 @@ static void prv_window_load(Window *window) {
   // The status bar shows the current time. With it, the text, the scrolling by screens
   // and the progress indicator use only the area below it; see ``prv_place_layers``.
   s_status_bar = status_bar_layer_create();
-  status_bar_layer_set_colors(s_status_bar, GColorWhite, GColorBlack);
   status_bar_layer_set_separator_mode(s_status_bar, StatusBarLayerSeparatorModeDotted);
   layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
 
@@ -310,19 +325,19 @@ static void prv_window_load(Window *window) {
   s_notice_layer = text_layer_create(GRectZero);
   text_layer_set_font(s_notice_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_text_alignment(s_notice_layer, GTextAlignmentCenter);
-  text_layer_set_background_color(s_notice_layer, GColorBlack);
-  text_layer_set_text_color(s_notice_layer, GColorWhite);
   text_layer_set_text(s_notice_layer, "Last transfer incomplete. Save again.");
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_notice_layer));
 
   s_text_layer = text_layer_create(GRectZero);
   text_layer_set_overflow_mode(s_text_layer, GTextOverflowModeWordWrap);
+  text_layer_set_background_color(s_text_layer, GColorClear);
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_text_layer));
 
   s_indicator_layer = layer_create(GRectZero);
   layer_set_update_proc(s_indicator_layer, prv_indicator_update_proc);
   layer_add_child(window_layer, s_indicator_layer);
 
+  prv_apply_colors(settings.invert);
   prv_place_layers(settings.show_time);
   prv_reload();
 }
@@ -400,5 +415,6 @@ void text_window_apply_settings(void) {
   Settings settings;
   settings_load(&settings);
   // ``settings_save`` has already moved a turned-off size to the nearest enabled one.
+  prv_apply_colors(settings.invert);
   prv_apply_appearance(settings_text_size(), settings.show_time);
 }
