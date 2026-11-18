@@ -231,12 +231,20 @@ static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *c
   transfer_send_state();
 }
 
+// A short press closes the app and goes straight to the watchface. The text stays the
+// one to open on the next launch: only Back from the menu changes that.
+static void prv_select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  exit_reason_set(APP_EXIT_ACTION_PERFORMED_SUCCESSFULLY);
+  window_stack_pop_all(false);
+}
+
 // Called after the scroll layer has set up its own Up and Down handlers, which this replaces.
 static void prv_click_config_provider(void *context) {
   window_single_repeating_click_subscribe(BUTTON_ID_UP, SCROLL_REPEAT_INTERVAL_MS,
                                           prv_up_click_handler);
   window_single_repeating_click_subscribe(BUTTON_ID_DOWN, SCROLL_REPEAT_INTERVAL_MS,
                                           prv_down_click_handler);
+  window_single_click_subscribe(BUTTON_ID_SELECT, prv_select_click_handler);
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, prv_select_long_click_handler, NULL);
 }
 
