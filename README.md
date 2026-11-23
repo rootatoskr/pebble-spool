@@ -8,7 +8,7 @@ Written in C with the Pebble SDK; the phone side is PebbleKit JS.
 1. The settings page on the phone has five tabs, each with a name and a text field, and
    an Appearance block. Save sends what changed: the selected text, the appearance
    settings or both. Clear removes the selected text.
-   The page is in Ukrainian when the phone's language is Ukrainian, otherwise in English.
+   The page is in English.
    A text that is on the watch but not on this phone (after reinstalling the phone app,
    for example) shows its name from the watch; Clear works for it, and saving a new text
    there asks first.

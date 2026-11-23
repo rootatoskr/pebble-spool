@@ -100,6 +100,20 @@ test('makeName works in the page with only its declared neighbours', function() 
   });
 });
 
-test('English and Ukrainian strings have the same keys', function() {
-  assert.deepStrictEqual(Object.keys(page.STRINGS.uk).sort(), Object.keys(page.STRINGS.en).sort());
+test('every string the page asks for is defined', function() {
+  var url = page.buildUrl({slots: emptySlots(), selected: 0, maxBytes: text.MAX_TEXT_BYTES,
+    sizes: [14, 18, 20, 24],
+    appearance: {settings: {showTime: true, sizes: [14, 18, 20, 24], menuSize: 18},
+      textSize: 20, failed: false}});
+  var html = Buffer.from(url.slice(PREFIX.length), 'base64').toString('utf8');
+  var pattern = /data-(?:t|placeholder)="(\w+)"|\bt\('(\w+)'/g;
+  var keys = [];
+  var match;
+  while ((match = pattern.exec(html)) !== null) {
+    keys.push(match[1] || match[2]);
+  }
+  assert.ok(keys.length > 20, keys.length);
+  keys.forEach(function(key) {
+    assert.strictEqual(typeof page.STRINGS[key], 'string', key);
+  });
 });

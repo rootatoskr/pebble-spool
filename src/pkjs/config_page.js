@@ -117,75 +117,39 @@ var STYLE = [
   '.choice input{width:20px;height:20px;margin:0}'
 ].join('');
 
-// The page shows these in Ukrainian if the phone's language is Ukrainian, otherwise
-// in English. "{0}" and "{1}" stand for the values filled in by the page.
+// The texts of the page. "{0}" and "{1}" stand for the values filled in by the page.
 var STRINGS = {
-  en: {
-    title: 'Texts for the watch',
-    failed: 'This text has not reached the watch yet. Open Spool on the watch and it ' +
-      'will be sent automatically. If not, tap "Save" again.',
-    name: 'Name',
-    namePlaceholder: 'First line of the text',
-    text: 'Text',
-    textPlaceholder: 'Paste text here',
-    hint: 'Emoji and characters missing from the watch font will be replaced with "?". ' +
-      'Only the selected text is saved.',
-    appearance: 'Appearance',
-    settingsFailed: 'The appearance settings have not reached the watch yet. Open Spool ' +
-      'on the watch and they will be sent automatically.',
-    showTime: 'Show time',
-    sizes: 'Text sizes that holding Select cycles through',
-    menuSize: 'Menu title size',
-    invert: 'Inverted colors',
-    scrolling: 'Scrolling',
-    scrollScreen: 'By screen',
-    scrollSmooth: 'Smooth',
-    save: 'Save',
-    clear: 'Clear',
-    cancel: 'Cancel',
-    textSize: 'Now on the watch: {0}',
-    empty: 'empty',
-    bytes: 'Bytes: {0} of {1}',
-    tooLong: 'The text is too long by {0} bytes. Shorten it to save.',
-    onWatch: 'On the watch: {0}',
-    confirmClear: 'Clear text {0}? It will be removed from the watch.',
-    watchOnly: 'Is on the watch, no copy on this phone',
-    replace: 'Replace',
-    confirmReplace: 'Replace the text on the watch? It is not on this phone.'
-  },
-  uk: {
-    title: 'Тексти для годинника',
-    failed: 'Цей текст ще не дійшов до годинника. Відкрий Spool на годиннику – текст ' +
-      'надішлеться сам. Якщо ні, натисни «Зберегти» ще раз.',
-    name: 'Назва',
-    namePlaceholder: 'Перший рядок тексту',
-    text: 'Текст',
-    textPlaceholder: 'Встав текст сюди',
-    hint: 'Емодзі та символи, яких немає у шрифті годинника, буде замінено на «?». ' +
-      'Зберігається лише вибраний текст.',
-    appearance: 'Вигляд',
-    settingsFailed: 'Налаштування вигляду ще не дійшли до годинника. Відкрий Spool ' +
-      'на годиннику – вони надішлються самі.',
-    showTime: 'Показувати час',
-    sizes: 'Розміри тексту, між якими перемикає утримання Select',
-    menuSize: 'Розмір назв у меню',
-    invert: 'Інвертовані кольори',
-    scrolling: 'Прокручування',
-    scrollScreen: 'По екрану',
-    scrollSmooth: 'Плавно',
-    save: 'Зберегти',
-    clear: 'Очистити',
-    cancel: 'Скасувати',
-    textSize: 'Зараз на годиннику: {0}',
-    empty: 'порожньо',
-    bytes: 'Байтів: {0} з {1}',
-    tooLong: 'Текст задовгий. Зайвих байтів: {0}. Скороти його, щоб зберегти.',
-    onWatch: 'На годиннику: {0}',
-    confirmClear: 'Очистити текст {0}? Він зникне з годинника.',
-    watchOnly: 'Є на годиннику, копії на цьому телефоні немає',
-    replace: 'Замінити',
-    confirmReplace: 'Замінити текст на годиннику? Його немає на цьому телефоні.'
-  }
+  title: 'Texts for the watch',
+  failed: 'This text has not reached the watch yet. Open Spool on the watch and it ' +
+    'will be sent automatically. If not, tap "Save" again.',
+  name: 'Name',
+  namePlaceholder: 'First line of the text',
+  text: 'Text',
+  textPlaceholder: 'Paste text here',
+  hint: 'Emoji and characters missing from the watch font will be replaced with "?". ' +
+    'Only the selected text is saved.',
+  appearance: 'Appearance',
+  settingsFailed: 'The appearance settings have not reached the watch yet. Open Spool ' +
+    'on the watch and they will be sent automatically.',
+  showTime: 'Show time',
+  sizes: 'Text sizes that holding Select cycles through',
+  menuSize: 'Menu title size',
+  invert: 'Inverted colors',
+  scrolling: 'Scrolling',
+  scrollScreen: 'By screen',
+  scrollSmooth: 'Smooth',
+  save: 'Save',
+  clear: 'Clear',
+  cancel: 'Cancel',
+  textSize: 'Now on the watch: {0}',
+  empty: 'empty',
+  bytes: 'Bytes: {0} of {1}',
+  tooLong: 'The text is too long by {0} bytes. Shorten it to save.',
+  onWatch: 'On the watch: {0}',
+  confirmClear: 'Clear text {0}? It will be removed from the watch.',
+  watchOnly: 'Is on the watch, no copy on this phone',
+  replace: 'Replace',
+  confirmReplace: 'Replace the text on the watch? It is not on this phone.'
 };
 
 // ``data-t`` names the string for an element's text, ``data-placeholder`` for its
@@ -228,19 +192,15 @@ var BODY = [
 // Runs inside the page. ``state``, ``STRINGS`` and the helper functions are defined
 // before it.
 function pageMain() {
-  var language = /^uk/i.test(navigator.language || '') ? 'uk' : 'en';
-  var strings = STRINGS[language];
-
   function t(key, first, second) {
-    return strings[key].replace('{0}', first).replace('{1}', second);
+    return STRINGS[key].replace('{0}', first).replace('{1}', second);
   }
 
-  document.documentElement.lang = language;
   Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function(element) {
-    element.textContent = strings[element.getAttribute('data-t')];
+    element.textContent = STRINGS[element.getAttribute('data-t')];
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-placeholder]'), function(element) {
-    element.placeholder = strings[element.getAttribute('data-placeholder')];
+    element.placeholder = STRINGS[element.getAttribute('data-placeholder')];
   });
 
   var tabs = document.getElementById('tabs');
