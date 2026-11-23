@@ -9,7 +9,8 @@
 #define INDICATOR_WIDTH 3
 #define INDICATOR_GAP 3
 #define INDICATOR_MIN_HEIGHT 12
-// Layer coordinates are 16-bit, so text taller than this is cut off.
+// Layer coordinates are 16-bit, so text taller than this is cut off, at a line boundary,
+// and a note below it says so.
 #define MAX_TEXT_HEIGHT 30000
 #define FONT_COUNT SETTINGS_SIZE_COUNT
 #define SCROLL_REPEAT_INTERVAL_MS 300
@@ -32,6 +33,7 @@ static StatusBarLayer *s_status_bar;
 static ScrollLayer *s_scroll_layer;
 static TextLayer *s_notice_layer;
 static TextLayer *s_text_layer;
+static TextLayer *s_too_long_layer;
 static Layer *s_indicator_layer;
 // Running from the moment the window appears until a short Select press may close the app.
 static AppTimer *s_select_exit_timer;
@@ -148,15 +150,33 @@ static void prv_layout(void) {
   }
 
   Layer *text_layer = text_layer_get_layer(s_text_layer);
+  Layer *too_long_layer = text_layer_get_layer(s_too_long_layer);
+  layer_set_hidden(too_long_layer, true);
   if (s_text) {
-    int16_t height = prv_text_height(s_text, s_font, width, GTextAlignmentLeft) +
-                     FONT_BOTTOM_PADDING[s_font_index];
+    int16_t height = prv_text_height(s_text, s_font, width, GTextAlignmentLeft);
+    // A text that reaches the limit is cut there: the layout cannot tell how much taller
+    // it is, so a text that only just fits counts as cut too.
+    bool too_long = height >= MAX_TEXT_HEIGHT - s_line_height;
+    if (too_long) {
+      height = MAX_TEXT_HEIGHT / s_line_height * s_line_height;
+    } else {
+      height += FONT_BOTTOM_PADDING[s_font_index];
+    }
     text_layer_set_font(s_text_layer, s_font);
     text_layer_set_text_alignment(s_text_layer, GTextAlignmentLeft);
     text_layer_set_text(s_text_layer, s_text);
     s_text_top = y + TEXT_MARGIN;
     layer_set_frame(text_layer, GRect(TEXT_MARGIN, s_text_top, width, height));
     s_content_height = s_text_top + height;
+    if (too_long) {
+      text_layer_set_font(s_too_long_layer, s_font);
+      int16_t note_height = prv_text_height(text_layer_get_text(s_too_long_layer), s_font,
+                                            width, GTextAlignmentCenter) +
+                            FONT_BOTTOM_PADDING[s_font_index];
+      layer_set_frame(too_long_layer, GRect(0, s_content_height, frame.size.w, note_height));
+      layer_set_hidden(too_long_layer, false);
+      s_content_height += note_height;
+    }
     // Scrolling by screens stops only at line boundaries, the last screen too: the content
     // gets empty space at the bottom so that its end is one.
     int16_t scroll_range = s_content_height - frame.size.h - s_text_top;
@@ -243,6 +263,8 @@ static void prv_apply_colors(bool invert) {
   text_layer_set_text_color(s_text_layer, foreground);
   text_layer_set_background_color(s_notice_layer, foreground);
   text_layer_set_text_color(s_notice_layer, background);
+  text_layer_set_background_color(s_too_long_layer, foreground);
+  text_layer_set_text_color(s_too_long_layer, background);
   layer_mark_dirty(s_indicator_layer);
 }
 
@@ -358,6 +380,11 @@ static void prv_window_load(Window *window) {
   text_layer_set_background_color(s_text_layer, GColorClear);
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_text_layer));
 
+  s_too_long_layer = text_layer_create(GRectZero);
+  text_layer_set_text_alignment(s_too_long_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_too_long_layer, "Text too long to show in full. Shorten it in settings.");
+  scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_too_long_layer));
+
   s_indicator_layer = layer_create(GRectZero);
   layer_set_update_proc(s_indicator_layer, prv_indicator_update_proc);
   layer_add_child(window_layer, s_indicator_layer);
@@ -391,6 +418,7 @@ static void prv_window_unload(Window *window) {
     s_select_exit_timer = NULL;
   }
   layer_destroy(s_indicator_layer);
+  text_layer_destroy(s_too_long_layer);
   text_layer_destroy(s_text_layer);
   text_layer_destroy(s_notice_layer);
   scroll_layer_destroy(s_scroll_layer);
