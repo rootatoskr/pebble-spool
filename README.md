@@ -9,6 +9,9 @@ Written in C with the Pebble SDK; the phone side is PebbleKit JS.
    an Appearance block. Save sends what changed: the selected text, the appearance
    settings or both. Clear removes the selected text.
    The page is in Ukrainian when the phone's language is Ukrainian, otherwise in English.
+   A text that is on the watch but not on this phone (after reinstalling the phone app,
+   for example) shows its name from the watch; Clear works for it, and saving a new text
+   there asks first.
 2. The watch stores the texts in persistent storage and shows them without the phone
    nearby. The app starts with a menu of the stored texts, or with the text that was
    open when the app was left; only Back from the menu makes the next launch start
