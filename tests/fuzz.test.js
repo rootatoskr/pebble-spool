@@ -186,7 +186,7 @@ test('pageSlots with watchSlots of the wrong shape', function() {
   });
 });
 
-test('pageSlots with broken watchSlots JSON still opens the page', {todo: 'reproduces a found bug'}, function() {
+test('pageSlots with broken watchSlots JSON still opens the page', function() {
   var slots = sync.pageSlots(fakeStorage({watchSlots: '[{"name":'}));
   assert.strictEqual(slots.length, 5);
 });

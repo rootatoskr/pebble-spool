@@ -234,10 +234,19 @@ function takeWatchSlots(storage, watchSlots) {
   storage.setItem('watchSlots', JSON.stringify(watchSlots));
 }
 
+function readWatchSlots(storage) {
+  try {
+    var value = JSON.parse(storage.getItem('watchSlots') || 'null');
+    return Array.isArray(value) ? value : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 // A slot never saved on this phone is 'watch' if the watch reported a text in it: the
 // page shows its name from the watch as ``watchName``.
 function pageSlots(storage) {
-  var watchSlots = JSON.parse(storage.getItem('watchSlots') || 'null') || [];
+  var watchSlots = readWatchSlots(storage);
   var slots = [];
   for (var slot = 0; slot < SLOT_COUNT; slot++) {
     var saved = storage.getItem(storageKey('text', slot)) || '';
