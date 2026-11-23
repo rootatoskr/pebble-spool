@@ -116,8 +116,13 @@ function sendFirst(item) {
 }
 
 // Saves a new version of a slot to be sent before other texts. An empty text clears
-// the slot on the watch.
+// the slot on the watch. A text that would not fit on the watch is not saved: the
+// settings page does not let it through, so it can only come from elsewhere.
 function saveText(slot, name, newText) {
+  if (!sync.textFits(newText)) {
+    console.log('Slot ' + slot + ': text too long, not saved');
+    return;
+  }
   localStorage.setItem(sync.storageKey('text', slot), newText);
   localStorage.setItem(sync.storageKey('name', slot), name);
   // A positive 31-bit id, 0 means "nothing stored" on the watch.

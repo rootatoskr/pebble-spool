@@ -223,3 +223,10 @@ test('chunkMessage uses only keys declared in package.json', function() {
     assert.ok(declared.indexOf('SlotId' + slot) >= 0);
   }
 });
+
+test('textFits measures the text as it will be sent', function() {
+  assert.strictEqual(sync.textFits('ї'.repeat(text.MAX_TEXT_BYTES / 2)), true);
+  assert.strictEqual(sync.textFits('ї'.repeat(text.MAX_TEXT_BYTES / 2) + 'a'), false);
+  // Characters that normalization removes do not count.
+  assert.strictEqual(sync.textFits('a'.repeat(text.MAX_TEXT_BYTES) + '́​'), true);
+});

@@ -274,6 +274,11 @@ function selectedSlot(storage) {
 }
 
 // Everything needed to send the saved version of a slot.
+// Whether ``value`` fits on the watch once it is normalized as it will be sent.
+function textFits(value) {
+  return text.utf8Length(text.normalizeText(value)) <= text.MAX_TEXT_BYTES;
+}
+
 function buildTransfer(storage, slot) {
   var normalized = text.normalizeText(storage.getItem(storageKey('text', slot)) || '');
   return {
@@ -323,6 +328,7 @@ module.exports = {
   queueAdd: queueAdd,
   pageSlots: pageSlots,
   selectedSlot: selectedSlot,
+  textFits: textFits,
   buildTransfer: buildTransfer,
   chunkMessage: chunkMessage
 };
