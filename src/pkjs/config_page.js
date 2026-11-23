@@ -117,44 +117,125 @@ var STYLE = [
   '.choice input{width:20px;height:20px;margin:0}'
 ].join('');
 
+// The page shows these in Ukrainian if the phone's language is Ukrainian, otherwise
+// in English. "{0}" and "{1}" stand for the values filled in by the page.
+var STRINGS = {
+  en: {
+    title: 'Texts for the watch',
+    failed: 'This text has not reached the watch yet. Open pebble-spool on the watch and it ' +
+      'will be sent automatically. If not, tap "Save" again.',
+    name: 'Name',
+    namePlaceholder: 'First line of the text',
+    text: 'Text',
+    textPlaceholder: 'Paste text here',
+    hint: 'Emoji and characters missing from the watch font will be replaced with "?". ' +
+      'Only the selected text is saved.',
+    appearance: 'Appearance',
+    settingsFailed: 'The appearance settings have not reached the watch yet. Open pebble-spool ' +
+      'on the watch and they will be sent automatically.',
+    showTime: 'Show time',
+    sizes: 'Text sizes that holding Select cycles through',
+    menuSize: 'Menu title size',
+    invert: 'Inverted colors',
+    scrolling: 'Scrolling',
+    scrollScreen: 'By screen',
+    scrollSmooth: 'Smooth',
+    save: 'Save',
+    clear: 'Clear',
+    cancel: 'Cancel',
+    textSize: 'Now on the watch: {0}',
+    empty: 'empty',
+    bytes: 'Bytes: {0} of {1}',
+    tooLong: 'The text is too long by {0} bytes. Shorten it to save.',
+    onWatch: 'On the watch: {0}',
+    confirmClear: 'Clear text {0}? It will be removed from the watch.'
+  },
+  uk: {
+    title: 'Тексти для годинника',
+    failed: 'Цей текст ще не дійшов до годинника. Відкрий pebble-spool на годиннику – текст ' +
+      'надішлеться сам. Якщо ні, натисни «Зберегти» ще раз.',
+    name: 'Назва',
+    namePlaceholder: 'Перший рядок тексту',
+    text: 'Текст',
+    textPlaceholder: 'Встав текст сюди',
+    hint: 'Емодзі та символи, яких немає у шрифті годинника, буде замінено на «?». ' +
+      'Зберігається лише вибраний текст.',
+    appearance: 'Вигляд',
+    settingsFailed: 'Налаштування вигляду ще не дійшли до годинника. Відкрий pebble-spool ' +
+      'на годиннику – вони надішлються самі.',
+    showTime: 'Показувати час',
+    sizes: 'Розміри тексту, між якими перемикає утримання Select',
+    menuSize: 'Розмір назв у меню',
+    invert: 'Інвертовані кольори',
+    scrolling: 'Прокручування',
+    scrollScreen: 'По екрану',
+    scrollSmooth: 'Плавно',
+    save: 'Зберегти',
+    clear: 'Очистити',
+    cancel: 'Скасувати',
+    textSize: 'Зараз на годиннику: {0}',
+    empty: 'порожньо',
+    bytes: 'Байтів: {0} з {1}',
+    tooLong: 'Текст задовгий. Зайвих байтів: {0}. Скороти його, щоб зберегти.',
+    onWatch: 'На годиннику: {0}',
+    confirmClear: 'Очистити текст {0}? Він зникне з годинника.'
+  }
+};
+
+// ``data-t`` names the string for an element's text, ``data-placeholder`` for its
+// placeholder.
 var BODY = [
-  '<h1>Тексти для годинника</h1>',
+  '<h1 data-t="title"></h1>',
   '<div id="tabs" class="tabs"></div>',
-  '<div id="failed" class="message" hidden>Цей текст ще не дійшов до годинника. ',
-  'Відкрий pebble-spool на годиннику – текст надішлеться сам. ',
-  'Якщо ні, натисни «Зберегти» ще раз.</div>',
-  '<label for="name">Назва</label>',
+  '<div id="failed" class="message" data-t="failed" hidden></div>',
+  '<label for="name" data-t="name"></label>',
   // A one-line textarea, not an input: an input drops pasted line breaks and glues
   // the words together, a textarea keeps them and makeName turns them into spaces.
-  '<textarea id="name" rows="1" placeholder="Перший рядок тексту"></textarea>',
+  '<textarea id="name" rows="1" data-placeholder="namePlaceholder"></textarea>',
   '<div id="name-hint" class="hint"></div>',
-  '<label for="text">Текст</label>',
-  '<textarea id="text" placeholder="Встав текст сюди"></textarea>',
+  '<label for="text" data-t="text"></label>',
+  '<textarea id="text" data-placeholder="textPlaceholder"></textarea>',
   '<div id="counter"></div>',
   '<div id="warning" class="message" hidden></div>',
-  '<p class="hint">Емодзі та символи, яких немає у шрифті годинника, ',
-  'буде замінено на «?». Зберігається лише вибраний текст.</p>',
-  '<h2>Вигляд</h2>',
-  '<div id="settings-failed" class="message" hidden>Налаштування вигляду ще не дійшли ',
-  'до годинника. Відкрий pebble-spool на годиннику – вони надішлються самі.</div>',
-  '<label class="choice"><input type="checkbox" id="show-time">Показувати час</label>',
-  '<label>Розміри тексту, між якими перемикає утримання Select</label>',
+  '<p class="hint" data-t="hint"></p>',
+  '<h2 data-t="appearance"></h2>',
+  '<div id="settings-failed" class="message" data-t="settingsFailed" hidden></div>',
+  '<label class="choice"><input type="checkbox" id="show-time"><span data-t="showTime"></span>',
+  '</label>',
+  '<label data-t="sizes"></label>',
   '<div id="sizes"></div>',
   '<div id="text-size" class="hint"></div>',
-  '<label>Розмір назв у меню</label>',
+  '<label data-t="menuSize"></label>',
   '<div id="menu-sizes"></div>',
-  '<label class="choice"><input type="checkbox" id="invert">Інвертовані кольори</label>',
-  '<label>Прокручування</label>',
+  '<label class="choice"><input type="checkbox" id="invert"><span data-t="invert"></span>',
+  '</label>',
+  '<label data-t="scrolling"></label>',
   '<div id="scroll-modes"></div>',
-  '<button id="save">Зберегти</button>',
-  '<button id="clear" class="secondary">Очистити</button>',
+  '<button id="save" data-t="save"></button>',
+  '<button id="clear" class="secondary" data-t="clear"></button>',
   '<div id="confirm" class="message" hidden><div id="confirm-text"></div>',
-  '<div class="row"><button id="confirm-yes" class="danger">Очистити</button>',
-  '<button id="confirm-no" class="secondary">Скасувати</button></div></div>'
+  '<div class="row"><button id="confirm-yes" class="danger" data-t="clear"></button>',
+  '<button id="confirm-no" class="secondary" data-t="cancel"></button></div></div>'
 ].join('');
 
-// Runs inside the page. ``state`` and the helper functions are defined before it.
+// Runs inside the page. ``state``, ``STRINGS`` and the helper functions are defined
+// before it.
 function pageMain() {
+  var language = /^uk/i.test(navigator.language || '') ? 'uk' : 'en';
+  var strings = STRINGS[language];
+
+  function t(key, first, second) {
+    return strings[key].replace('{0}', first).replace('{1}', second);
+  }
+
+  document.documentElement.lang = language;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function(element) {
+    element.textContent = strings[element.getAttribute('data-t')];
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-placeholder]'), function(element) {
+    element.placeholder = strings[element.getAttribute('data-placeholder')];
+  });
+
   var tabs = document.getElementById('tabs');
   var failed = document.getElementById('failed');
   var nameField = document.getElementById('name');
@@ -227,7 +308,7 @@ function pageMain() {
       settings.invert = invert.checked;
     });
     var scrollModes = document.getElementById('scroll-modes');
-    [['screen', 'По екрану'], ['smooth', 'Плавно']].forEach(function(mode) {
+    [['screen', t('scrollScreen')], ['smooth', t('scrollSmooth')]].forEach(function(mode) {
       var label = document.createElement('label');
       var radio = document.createElement('input');
       label.className = 'choice';
@@ -242,7 +323,7 @@ function pageMain() {
       scrollModes.appendChild(label);
     });
     document.getElementById('text-size').textContent = state.appearance.textSize ?
-      'Зараз на годиннику: ' + state.appearance.textSize : '';
+      t('textSize', state.appearance.textSize) : '';
     updateSizeBoxes();
   }
 
@@ -274,7 +355,7 @@ function pageMain() {
       // "*" marks unsaved edits, "!" a text that has not reached the watch.
       number.textContent = (index + 1) + (isEdited(index) ? '*' : '') +
         (isUndelivered(index) ? '!' : '');
-      label.textContent = makeName(draft.name, normalizeText(draft.text)) || 'порожньо';
+      label.textContent = makeName(draft.name, normalizeText(draft.text)) || t('empty');
       button.appendChild(number);
       button.appendChild(label);
       button.className = index === selected ? 'active' : '';
@@ -290,12 +371,11 @@ function pageMain() {
     var normalized = normalizeText(draft.text);
     var bytes = utf8Length(normalized);
     var over = bytes > state.maxBytes;
-    counter.textContent = 'Байтів: ' + bytes + ' з ' + state.maxBytes;
+    counter.textContent = t('bytes', bytes, state.maxBytes);
     counter.className = over ? 'over' : '';
     warning.hidden = !over;
-    warning.textContent = 'Текст задовгий. Зайвих байтів: ' + (bytes - state.maxBytes) +
-      '. Скороти його, щоб зберегти.';
-    nameHint.textContent = 'На годиннику: ' + (makeName(draft.name, normalized) || '–');
+    warning.textContent = t('tooLong', bytes - state.maxBytes);
+    nameHint.textContent = t('onWatch', makeName(draft.name, normalized) || '–');
     failed.hidden = !isUndelivered(selected);
     save.disabled = over;
     clear.disabled = state.slots[selected].state === 'empty';
@@ -334,7 +414,7 @@ function pageMain() {
 
   // Saving an empty text clears the slot too, so it asks first as well.
   function askToClear() {
-    confirmText.textContent = 'Очистити текст ' + (selected + 1) + '? Він зникне з годинника.';
+    confirmText.textContent = t('confirmClear', selected + 1);
     confirmBox.hidden = false;
   }
 
@@ -376,11 +456,12 @@ function buildUrl(state) {
   // "<" must not appear in the inline script, and U+2028/U+2029 break string literals.
   var stateJson = JSON.stringify(state).replace(/</g, '\\u003c')
     .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-  var html = '<!DOCTYPE html><html lang="uk"><head><meta charset="utf-8">' +
+  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>pebble-spool</title><style>' + STYLE + '</style></head><body>' + BODY +
     '<script>var state=' + stateJson + ';' +
     'var NAME_MAX_BYTES=' + text.NAME_MAX_BYTES + ';' +
+    'var STRINGS=' + JSON.stringify(STRINGS) + ';' +
     'var normalizeText=' + text.normalizeText.toString() + ';' +
     'var utf8Length=' + text.utf8Length.toString() + ';' +
     'var makeName=' + text.makeName.toString() + ';' +
@@ -425,6 +506,7 @@ function parseResponse(response, slotCount) {
 }
 
 module.exports = {
+  STRINGS: STRINGS,
   buildUrl: buildUrl,
   parseResponse: parseResponse
 };

@@ -99,3 +99,7 @@ test('makeName works in the page with only its declared neighbours', function() 
     assert.strictEqual(context.makeName(sample[0], sample[1]), text.makeName(sample[0], sample[1]));
   });
 });
+
+test('English and Ukrainian strings have the same keys', function() {
+  assert.deepStrictEqual(Object.keys(page.STRINGS.uk).sort(), Object.keys(page.STRINGS.en).sort());
+});
