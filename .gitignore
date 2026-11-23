@@ -83,3 +83,6 @@ out/
 
 # Pebble
 .lock-waf*
+
+# Store listing
+screenshots/
