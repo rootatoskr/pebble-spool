@@ -60,7 +60,7 @@ node --test tests/
 - `src/pkjs/sync.js` - which texts to send and in what order, message building
 - `src/pkjs/text.js` - text normalization, names, splitting into chunks
 - `src/pkjs/config_page.js` - the settings page
-- `resources/` - DejaVu Sans and its license
+- `resources/` - DejaVu Sans and its license, the launcher icon
 - `tests/` - tests for the phone side
 
 ## Notes

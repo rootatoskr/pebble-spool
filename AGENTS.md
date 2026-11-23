@@ -107,7 +107,7 @@ alwaysApply: true
 ```
 src/c/        - код застосунку на годиннику (C)
 src/pkjs/     - код на телефоні (PebbleKit JS): сторінка налаштувань, передача тексту, копія в localStorage
-resources/    - шрифти
+resources/    - шрифти й іконка в лаунчері
 package.json  - метадані, платформи, ключі AppMessage, ресурси
 ```
 
