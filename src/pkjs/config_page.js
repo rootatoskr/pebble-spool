@@ -122,7 +122,7 @@ var STYLE = [
 var STRINGS = {
   en: {
     title: 'Texts for the watch',
-    failed: 'This text has not reached the watch yet. Open pebble-spool on the watch and it ' +
+    failed: 'This text has not reached the watch yet. Open Spool on the watch and it ' +
       'will be sent automatically. If not, tap "Save" again.',
     name: 'Name',
     namePlaceholder: 'First line of the text',
@@ -131,7 +131,7 @@ var STRINGS = {
     hint: 'Emoji and characters missing from the watch font will be replaced with "?". ' +
       'Only the selected text is saved.',
     appearance: 'Appearance',
-    settingsFailed: 'The appearance settings have not reached the watch yet. Open pebble-spool ' +
+    settingsFailed: 'The appearance settings have not reached the watch yet. Open Spool ' +
       'on the watch and they will be sent automatically.',
     showTime: 'Show time',
     sizes: 'Text sizes that holding Select cycles through',
@@ -152,7 +152,7 @@ var STRINGS = {
   },
   uk: {
     title: 'Тексти для годинника',
-    failed: 'Цей текст ще не дійшов до годинника. Відкрий pebble-spool на годиннику – текст ' +
+    failed: 'Цей текст ще не дійшов до годинника. Відкрий Spool на годиннику – текст ' +
       'надішлеться сам. Якщо ні, натисни «Зберегти» ще раз.',
     name: 'Назва',
     namePlaceholder: 'Перший рядок тексту',
@@ -161,7 +161,7 @@ var STRINGS = {
     hint: 'Емодзі та символи, яких немає у шрифті годинника, буде замінено на «?». ' +
       'Зберігається лише вибраний текст.',
     appearance: 'Вигляд',
-    settingsFailed: 'Налаштування вигляду ще не дійшли до годинника. Відкрий pebble-spool ' +
+    settingsFailed: 'Налаштування вигляду ще не дійшли до годинника. Відкрий Spool ' +
       'на годиннику – вони надішлються самі.',
     showTime: 'Показувати час',
     sizes: 'Розміри тексту, між якими перемикає утримання Select',
@@ -458,7 +458,7 @@ function buildUrl(state) {
     .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
   var html = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<title>pebble-spool</title><style>' + STYLE + '</style></head><body>' + BODY +
+    '<title>Spool</title><style>' + STYLE + '</style></head><body>' + BODY +
     '<script>var state=' + stateJson + ';' +
     'var NAME_MAX_BYTES=' + text.NAME_MAX_BYTES + ';' +
     'var STRINGS=' + JSON.stringify(STRINGS) + ';' +

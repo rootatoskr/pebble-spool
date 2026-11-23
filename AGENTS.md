@@ -94,7 +94,7 @@ alwaysApply: true
 - Цільова платформа лише `emery` (Pebble Time 2). У `package.json` в `pebble.targetPlatforms` має бути тільки `emery`.
 - Це застосунок, а не циферблат: `pebble.watchapp.watchface` має бути `false`.
 - Застосунок налаштовуваний: у `pebble.capabilities` має бути `configurable`.
-- `pebble.displayName` – `pebble-spool`. Поле `name` на верхньому рівні – теж `pebble-spool`.
+- `pebble.displayName` – `Spool`: так застосунок називається на годиннику, на сторінці налаштувань і в магазині. Поле `name` на верхньому рівні – `pebble-spool`, як репозиторій.
 
 ## Структура проекту
 

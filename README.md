@@ -1,6 +1,6 @@
 # pebble-spool
 
-A watchapp for Pebble Time 2 (emery) that shows texts pasted on the phone.
+Spool, a watchapp for Pebble Time 2 (emery) that shows texts pasted on the phone.
 Written in C with the Pebble SDK; the phone side is PebbleKit JS.
 
 ## How it works
@@ -8,6 +8,7 @@ Written in C with the Pebble SDK; the phone side is PebbleKit JS.
 1. The settings page on the phone has five tabs, each with a name and a text field, and
    an Appearance block. Save sends what changed: the selected text, the appearance
    settings or both. Clear removes the selected text.
+   The page is in Ukrainian when the phone's language is Ukrainian, otherwise in English.
 2. The watch stores the texts in persistent storage and shows them without the phone
    nearby. The app starts with a menu of the stored texts, or with the text that was
    open when the app was left; only Back from the menu makes the next launch start
