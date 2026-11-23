@@ -157,6 +157,12 @@ static void prv_layout(void) {
     s_text_top = y + TEXT_MARGIN;
     layer_set_frame(text_layer, GRect(TEXT_MARGIN, s_text_top, width, height));
     s_content_height = s_text_top + height;
+    // Scrolling by screens stops only at line boundaries, the last screen too: the content
+    // gets empty space at the bottom so that its end is one.
+    int16_t scroll_range = s_content_height - frame.size.h - s_text_top;
+    if (!s_smooth_scroll && scroll_range > 0) {
+      s_content_height += (s_line_height - scroll_range % s_line_height) % s_line_height;
+    }
     scroll_layer_set_content_size(s_scroll_layer, GSize(frame.size.w, s_content_height));
   } else {
     const char *placeholder = s_damaged ? "Text damaged. It will be sent again from the phone."
@@ -179,6 +185,16 @@ static int32_t prv_offset_of_line(int32_t line) {
   return line > 0 ? -(s_text_top + line * s_line_height) : 0;
 }
 
+// With scrolling by screens, the nearest line boundary at or above ``offset``, so that
+// the first line on screen is whole. Smooth scrolling keeps any offset.
+static int32_t prv_align_to_line(int32_t offset) {
+  if (s_smooth_scroll) {
+    return offset;
+  }
+  int32_t into_text = -offset - s_text_top;
+  return into_text > 0 ? prv_offset_of_line(into_text / s_line_height) : 0;
+}
+
 // One press moves by the visible height minus one line, in whole lines, so that the
 // last full line stays on screen as context and the first line on screen is never cut.
 static void prv_scroll_by_page(ClickRecognizerRef recognizer, int direction) {
@@ -186,17 +202,9 @@ static void prv_scroll_by_page(ClickRecognizerRef recognizer, int direction) {
   if (page_lines < 1) {
     page_lines = 1;
   }
-  // The offset is not on a line boundary after the end of the text was reached or the
-  // font was changed. Count from the boundary that makes the step shorter, not longer.
+  // The offset is always on a line boundary: see ``prv_align_to_line``.
   int32_t into_text = -s_scroll_offset - s_text_top;
-  int32_t line;
-  if (into_text <= 0) {
-    line = 0;
-  } else if (direction > 0) {
-    line = into_text / s_line_height;
-  } else {
-    line = (into_text + s_line_height - 1) / s_line_height;
-  }
+  int32_t line = into_text > 0 ? into_text / s_line_height : 0;
   line += direction * page_lines;
   // While a button is held the next step comes before an animation would finish.
   prv_scroll_to(prv_offset_of_line(line), !click_recognizer_is_repeating(recognizer));
@@ -251,7 +259,7 @@ static void prv_apply_appearance(int size, bool show_time) {
   }
   prv_place_layers(show_time);
   prv_layout();
-  prv_scroll_to(old_offset * s_content_height / old_height, false);
+  prv_scroll_to(prv_align_to_line(old_offset * s_content_height / old_height), false);
 }
 
 static void prv_select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -306,7 +314,8 @@ static void prv_reload(void) {
       s_stored_position.transfer_id == s_transfer_id &&
       s_stored_position.content_height > 0) {
     // The same scaling as on a font change; ``prv_scroll_to`` keeps it inside the content.
-    offset = s_stored_position.offset * s_content_height / s_stored_position.content_height;
+    offset = prv_align_to_line(s_stored_position.offset * s_content_height /
+                               s_stored_position.content_height);
   } else {
     s_stored_position = (StoragePosition) {0};
   }
