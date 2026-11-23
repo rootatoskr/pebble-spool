@@ -1,5 +1,7 @@
 # pebble-spool
 
+Install from the Pebble appstore: https://apps.repebble.com/14817aa6769140bda8a8f80d
+
 Spool, a watchapp for Pebble Time 2 (emery) that shows texts pasted on the phone.
 Written in C with the Pebble SDK; the phone side is PebbleKit JS.
 
