@@ -244,14 +244,35 @@ bool storage_commit(void) {
   return true;
 }
 
+// Checks without reading the text that the pieces of a complete version are all there.
+static bool prv_is_damaged(int text, int side, const SideHeader *header) {
+  if (header->total_bytes == 0) {
+    return false;
+  }
+  if (header->total_bytes > STORAGE_MAX_TEXT_BYTES || header->piece_count == 0) {
+    return true;
+  }
+  uint32_t bytes = 0;
+  for (int piece = 0; piece < header->piece_count; piece++) {
+    int size = persist_get_size(prv_piece_key(text, side, piece));
+    if (size <= 0) {
+      return true;
+    }
+    bytes += size;
+  }
+  return bytes != header->total_bytes;
+}
+
 void storage_get_info(int text, StorageTextInfo *info) {
   *info = (StorageTextInfo) {0};
   SideHeader header;
-  bool has_active = prv_read_header(text, prv_active_side(text), &header) &&
+  int active_side = prv_active_side(text);
+  bool has_active = prv_read_header(text, active_side, &header) &&
                     header.state == STATE_COMPLETE;
   if (has_active) {
     info->transfer_id = header.transfer_id;
     info->total_bytes = header.total_bytes;
+    info->damaged = prv_is_damaged(text, active_side, &header);
     memcpy(info->name, header.name, sizeof(info->name));
   }
   if (prv_read_header(text, prv_inactive_side(text), &header) &&

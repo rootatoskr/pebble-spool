@@ -35,7 +35,8 @@ static uint32_t prv_stored_transfer_id(int text) {
 
 // The phone compares the ids with its own copies and sends again the texts that differ,
 // and fills the settings page with the settings, the text size and the names and sizes
-// of the texts it has no copy of.
+// of the texts it has no copy of. A damaged text is reported with id 0, which the phone
+// never uses, so that the phone sends it again.
 void transfer_send_state(void) {
   const uint32_t id_keys[STORAGE_TEXT_COUNT] = {
     MESSAGE_KEY_SlotId0, MESSAGE_KEY_SlotId1, MESSAGE_KEY_SlotId2,
@@ -56,7 +57,7 @@ void transfer_send_state(void) {
   for (int text = 0; text < STORAGE_TEXT_COUNT; text++) {
     StorageTextInfo info;
     storage_get_info(text, &info);
-    dict_write_uint32(iter, id_keys[text], info.transfer_id);
+    dict_write_uint32(iter, id_keys[text], info.damaged ? 0 : info.transfer_id);
     dict_write_cstring(iter, name_keys[text], info.name);
     dict_write_uint16(iter, size_keys[text], info.total_bytes);
   }

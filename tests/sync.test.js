@@ -230,3 +230,14 @@ test('textFits measures the text as it will be sent', function() {
   // Characters that normalization removes do not count.
   assert.strictEqual(sync.textFits('a'.repeat(text.MAX_TEXT_BYTES) + '́​'), true);
 });
+
+test('newTextId is never 0 and stays a positive 31-bit number', function() {
+  assert.strictEqual(sync.newTextId(0), 1);
+  // The largest value Math.random can return.
+  var largest = sync.newTextId(1 - Math.pow(2, -53));
+  assert.strictEqual(largest, 0x7FFFFFFE);
+  for (var i = 0; i < 10000; i++) {
+    var id = sync.newTextId(Math.random());
+    assert.ok(id >= 1 && id <= 0x7FFFFFFF && id === Math.floor(id), String(id));
+  }
+});

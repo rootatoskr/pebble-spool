@@ -274,6 +274,12 @@ function selectedSlot(storage) {
 }
 
 // Everything needed to send the saved version of a slot.
+// A new transfer id from ``random`` in [0, 1): a positive 31-bit number. The watch uses
+// 0 for "nothing stored" and for a damaged text, so 0 is never an id.
+function newTextId(random) {
+  return Math.floor(random * 0x7FFFFFFE) + 1;
+}
+
 // Whether ``value`` fits on the watch once it is normalized as it will be sent.
 function textFits(value) {
   return text.utf8Length(text.normalizeText(value)) <= text.MAX_TEXT_BYTES;
@@ -329,6 +335,7 @@ module.exports = {
   pageSlots: pageSlots,
   selectedSlot: selectedSlot,
   textFits: textFits,
+  newTextId: newTextId,
   buildTransfer: buildTransfer,
   chunkMessage: chunkMessage
 };

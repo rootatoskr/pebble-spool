@@ -157,9 +157,7 @@ function saveText(slot, name, newText) {
   }
   localStorage.setItem(sync.storageKey('text', slot), newText);
   localStorage.setItem(sync.storageKey('name', slot), name);
-  // A positive 31-bit id, 0 means "nothing stored" on the watch.
-  localStorage.setItem(sync.storageKey('textId', slot),
-                       String(Math.floor(Math.random() * 0x7FFFFFFE) + 1));
+  localStorage.setItem(sync.storageKey('textId', slot), String(sync.newTextId(Math.random())));
   setSyncState(slot, 'pending');
   sendFirst(slot);
 }

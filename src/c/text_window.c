@@ -43,6 +43,8 @@ static int s_text_index;
 static uint32_t s_transfer_id;
 static char *s_text;
 static bool s_show_notice;
+// The stored text could not be read back whole: it waits to be sent again.
+static bool s_damaged;
 // Height of one line of text in the current font.
 static int16_t s_line_height;
 // Where the first line of text starts in the scrolled content.
@@ -157,7 +159,8 @@ static void prv_layout(void) {
     s_content_height = s_text_top + height;
     scroll_layer_set_content_size(s_scroll_layer, GSize(frame.size.w, s_content_height));
   } else {
-    const char *placeholder = "Paste text in settings on your phone";
+    const char *placeholder = s_damaged ? "Text damaged. It will be sent again from the phone."
+                                        : "Paste text in settings on your phone";
     GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
     int16_t height = prv_text_height(placeholder, font, width, GTextAlignmentCenter) + 8;
     text_layer_set_font(s_text_layer, font);
@@ -295,6 +298,7 @@ static void prv_reload(void) {
   storage_get_info(s_text_index, &info);
   s_transfer_id = info.transfer_id;
   s_show_notice = info.incomplete;
+  s_damaged = !s_text && info.damaged;
   prv_layout();
 
   int32_t offset = 0;

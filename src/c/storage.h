@@ -18,6 +18,9 @@ typedef struct {
   uint32_t total_bytes;
   // True if a transfer of a new version was started and never finished.
   bool incomplete;
+  // True if the stored version cannot be read back whole: pieces are missing or the
+  // sizes do not add up.
+  bool damaged;
   // Name of the stored version or, if it is empty, of the unfinished one.
   char name[STORAGE_NAME_MAX_BYTES + 1];
 } StorageTextInfo;
