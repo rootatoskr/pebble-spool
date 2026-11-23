@@ -4,6 +4,9 @@ var text = require('./text');
 
 var MAX_ATTEMPTS = 3;
 var RETRY_DELAY_MS = 1000;
+// How long to wait for the watch's result after the last chunk, and for its state after
+// a Hello that asks whether a text arrived.
+var ANSWER_TIMEOUT_MS = 10000;
 
 // The transfer in progress. Only one runs at a time. A newer transfer replaces it, and
 // callbacks of the replaced one stop when they see that they are no longer current.
@@ -42,6 +45,7 @@ function finishTransfer(transfer, ok) {
   if (transfer !== currentTransfer) {
     return;
   }
+  clearTimeout(transfer.timer);
   currentTransfer = null;
   if (transfer.item === sync.SETTINGS_ITEM) {
     localStorage.setItem('settingsState', ok ? 'synced' : 'failed');
@@ -65,10 +69,38 @@ function sendChunk(transfer, index) {
     // After the last chunk the watch confirms with ResultId/ResultOk.
     if (index + 1 < transfer.chunks.length) {
       sendChunk(transfer, index + 1);
+    } else {
+      transfer.timer = setTimeout(function() {
+        if (transfer === currentTransfer) {
+          askWhetherDelivered(transfer, 1);
+        }
+      }, ANSWER_TIMEOUT_MS);
     }
   }, function() {
     finishTransfer(transfer, false);
   });
+}
+
+// The watch's result did not come. Its state tells whether the text arrived: the
+// state goes to ``handleWatchState``, which marks the text delivered or sends it again.
+// The next transfer waits for that answer, since the watch does not report its state
+// while it receives a text.
+function askWhetherDelivered(transfer, attempt) {
+  if (attempt > MAX_ATTEMPTS) {
+    finishTransfer(transfer, false);
+    return;
+  }
+  transfer.waitingForState = true;
+  var askAgain = function() {
+    askWhetherDelivered(transfer, attempt + 1);
+  };
+  sendReliably({'Hello': 1}, isCurrent(transfer), function() {
+    transfer.timer = setTimeout(function() {
+      if (transfer === currentTransfer) {
+        askAgain();
+      }
+    }, ANSWER_TIMEOUT_MS);
+  }, askAgain);
 }
 
 // Sends the settings. The watch acknowledges the message and answers with its state.
@@ -187,6 +219,10 @@ Pebble.addEventListener('appmessage', function(e) {
   }
   var state = sync.stateFromPayload(payload);
   if (state) {
+    if (currentTransfer && currentTransfer.waitingForState) {
+      clearTimeout(currentTransfer.timer);
+      currentTransfer = null;
+    }
     handleWatchState(state);
   }
 });
