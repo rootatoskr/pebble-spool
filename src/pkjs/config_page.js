@@ -148,7 +148,10 @@ var STRINGS = {
     bytes: 'Bytes: {0} of {1}',
     tooLong: 'The text is too long by {0} bytes. Shorten it to save.',
     onWatch: 'On the watch: {0}',
-    confirmClear: 'Clear text {0}? It will be removed from the watch.'
+    confirmClear: 'Clear text {0}? It will be removed from the watch.',
+    watchOnly: 'Is on the watch, no copy on this phone',
+    replace: 'Replace',
+    confirmReplace: 'Replace the text on the watch? It is not on this phone.'
   },
   uk: {
     title: 'Тексти для годинника',
@@ -178,7 +181,10 @@ var STRINGS = {
     bytes: 'Байтів: {0} з {1}',
     tooLong: 'Текст задовгий. Зайвих байтів: {0}. Скороти його, щоб зберегти.',
     onWatch: 'На годиннику: {0}',
-    confirmClear: 'Очистити текст {0}? Він зникне з годинника.'
+    confirmClear: 'Очистити текст {0}? Він зникне з годинника.',
+    watchOnly: 'Є на годиннику, копії на цьому телефоні немає',
+    replace: 'Замінити',
+    confirmReplace: 'Замінити текст на годиннику? Його немає на цьому телефоні.'
   }
 };
 
@@ -187,6 +193,7 @@ var STRINGS = {
 var BODY = [
   '<h1 data-t="title"></h1>',
   '<div id="tabs" class="tabs"></div>',
+  '<div id="watch-only" class="hint" data-t="watchOnly" hidden></div>',
   '<div id="failed" class="message" data-t="failed" hidden></div>',
   '<label for="name" data-t="name"></label>',
   // A one-line textarea, not an input: an input drops pasted line breaks and glues
@@ -214,7 +221,7 @@ var BODY = [
   '<button id="save" data-t="save"></button>',
   '<button id="clear" class="secondary" data-t="clear"></button>',
   '<div id="confirm" class="message" hidden><div id="confirm-text"></div>',
-  '<div class="row"><button id="confirm-yes" class="danger" data-t="clear"></button>',
+  '<div class="row"><button id="confirm-yes" class="danger"></button>',
   '<button id="confirm-no" class="secondary" data-t="cancel"></button></div></div>'
 ].join('');
 
@@ -238,6 +245,7 @@ function pageMain() {
 
   var tabs = document.getElementById('tabs');
   var failed = document.getElementById('failed');
+  var watchOnly = document.getElementById('watch-only');
   var nameField = document.getElementById('name');
   var nameHint = document.getElementById('name-hint');
   var field = document.getElementById('text');
@@ -247,6 +255,8 @@ function pageMain() {
   var clear = document.getElementById('clear');
   var confirmBox = document.getElementById('confirm');
   var confirmText = document.getElementById('confirm-text');
+  var confirmYes = document.getElementById('confirm-yes');
+  var confirmAction = null;
 
   // Edits of every text are kept while the page is open, but only the selected
   // text is saved.
@@ -355,7 +365,8 @@ function pageMain() {
       // "*" marks unsaved edits, "!" a text that has not reached the watch.
       number.textContent = (index + 1) + (isEdited(index) ? '*' : '') +
         (isUndelivered(index) ? '!' : '');
-      label.textContent = makeName(draft.name, normalizeText(draft.text)) || t('empty');
+      label.textContent = makeName(draft.name, normalizeText(draft.text)) ||
+        state.slots[index].watchName || t('empty');
       button.appendChild(number);
       button.appendChild(label);
       button.className = index === selected ? 'active' : '';
@@ -375,8 +386,10 @@ function pageMain() {
     counter.className = over ? 'over' : '';
     warning.hidden = !over;
     warning.textContent = t('tooLong', bytes - state.maxBytes);
-    nameHint.textContent = t('onWatch', makeName(draft.name, normalized) || '–');
+    nameHint.textContent = t('onWatch', makeName(draft.name, normalized) ||
+      state.slots[selected].watchName || '–');
     failed.hidden = !isUndelivered(selected);
+    watchOnly.hidden = state.slots[selected].state !== 'watch';
     save.disabled = over;
     clear.disabled = state.slots[selected].state === 'empty';
     renderTabs();
@@ -412,10 +425,18 @@ function pageMain() {
     location.href = target + encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
 
+  function ask(question, answer, action) {
+    confirmText.textContent = question;
+    confirmYes.textContent = answer;
+    confirmAction = action;
+    confirmBox.hidden = false;
+  }
+
   // Saving an empty text clears the slot too, so it asks first as well.
   function askToClear() {
-    confirmText.textContent = t('confirmClear', selected + 1);
-    confirmBox.hidden = false;
+    ask(t('confirmClear', selected + 1), t('clear'), function() {
+      finish('', '');
+    });
   }
 
   nameField.addEventListener('input', function() {
@@ -431,6 +452,11 @@ function pageMain() {
     var draft = drafts[selected];
     if (!isTextChanged()) {
       finish(null, null);
+    } else if (normalizeText(draft.text) && state.slots[selected].state === 'watch') {
+      // The text on the watch is not on this phone, so it cannot be brought back.
+      ask(t('confirmReplace'), t('replace'), function() {
+        finish(draft.name, draft.text);
+      });
     } else if (normalizeText(draft.text)) {
       finish(draft.name, draft.text);
     } else {
@@ -438,8 +464,8 @@ function pageMain() {
     }
   });
   clear.addEventListener('click', askToClear);
-  document.getElementById('confirm-yes').addEventListener('click', function() {
-    finish('', '');
+  confirmYes.addEventListener('click', function() {
+    confirmAction();
   });
   document.getElementById('confirm-no').addEventListener('click', hideConfirm);
 
@@ -448,7 +474,8 @@ function pageMain() {
 }
 
 // ``state``: ``slots`` (for every slot its ``text``, ``name`` and ``state``: 'empty',
-// 'synced', 'pending' or 'failed'), ``selected`` (the slot to open with), ``maxBytes``,
+// 'synced', 'pending', 'failed' or 'watch', and for 'watch' the ``watchName``),
+// ``selected`` (the slot to open with), ``maxBytes``,
 // ``sizes`` (the text sizes) and ``appearance`` (``settings``, the watch's ``textSize``
 // or null, and ``failed``).
 function buildUrl(state) {

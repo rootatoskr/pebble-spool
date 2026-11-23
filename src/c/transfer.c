@@ -34,18 +34,31 @@ static uint32_t prv_stored_transfer_id(int text) {
 }
 
 // The phone compares the ids with its own copies and sends again the texts that differ,
-// and fills the settings page with the settings and the text size.
+// and fills the settings page with the settings, the text size and the names and sizes
+// of the texts it has no copy of.
 void transfer_send_state(void) {
-  const uint32_t keys[STORAGE_TEXT_COUNT] = {
+  const uint32_t id_keys[STORAGE_TEXT_COUNT] = {
     MESSAGE_KEY_SlotId0, MESSAGE_KEY_SlotId1, MESSAGE_KEY_SlotId2,
     MESSAGE_KEY_SlotId3, MESSAGE_KEY_SlotId4,
+  };
+  const uint32_t name_keys[STORAGE_TEXT_COUNT] = {
+    MESSAGE_KEY_SlotName0, MESSAGE_KEY_SlotName1, MESSAGE_KEY_SlotName2,
+    MESSAGE_KEY_SlotName3, MESSAGE_KEY_SlotName4,
+  };
+  const uint32_t size_keys[STORAGE_TEXT_COUNT] = {
+    MESSAGE_KEY_SlotSize0, MESSAGE_KEY_SlotSize1, MESSAGE_KEY_SlotSize2,
+    MESSAGE_KEY_SlotSize3, MESSAGE_KEY_SlotSize4,
   };
   DictionaryIterator *iter;
   if (s_receiving || app_message_outbox_begin(&iter) != APP_MSG_OK) {
     return;
   }
   for (int text = 0; text < STORAGE_TEXT_COUNT; text++) {
-    dict_write_uint32(iter, keys[text], prv_stored_transfer_id(text));
+    StorageTextInfo info;
+    storage_get_info(text, &info);
+    dict_write_uint32(iter, id_keys[text], info.transfer_id);
+    dict_write_cstring(iter, name_keys[text], info.name);
+    dict_write_uint16(iter, size_keys[text], info.total_bytes);
   }
   Settings settings;
   settings_load(&settings);
@@ -172,8 +185,13 @@ void transfer_init(TransferTextChangedHandler text_handler,
   s_settings_changed_handler = settings_handler;
   app_message_register_inbox_received(prv_inbox_received_handler);
   // The inbox fits one chunk message: five integers, the name and the chunk itself.
-  // The largest reply is the state: one id for every text and six small numbers.
+  // The largest reply is the state: for every text its id, name and size, and six small
+  // numbers.
   app_message_open(dict_calc_buffer_size(7, 4, 4, 4, 4, 4, STORAGE_NAME_MAX_BYTES + 1,
                                          CHUNK_MAX_BYTES + 1),
-                   dict_calc_buffer_size(STORAGE_TEXT_COUNT + 6, 4, 4, 4, 4, 4, 1, 1, 1, 1, 1, 1));
+                   dict_calc_buffer_size(3 * STORAGE_TEXT_COUNT + 6, 4, 4, 4, 4, 4,
+                                         STORAGE_NAME_MAX_BYTES + 1, STORAGE_NAME_MAX_BYTES + 1,
+                                         STORAGE_NAME_MAX_BYTES + 1, STORAGE_NAME_MAX_BYTES + 1,
+                                         STORAGE_NAME_MAX_BYTES + 1, 2, 2, 2, 2, 2,
+                                         1, 1, 1, 1, 1, 1));
 }

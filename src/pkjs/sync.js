@@ -23,6 +23,8 @@ var SETTINGS_ITEM = 'settings';
 // - settingsState: 'synced', 'pending' or 'failed', as for texts;
 // - watchSettings: the settings the watch reported last, as JSON;
 // - textSize: the text size the watch reported last.
+// One more key, watchSlots, keeps the name and size of every text the watch reported
+// last, as JSON. The page uses it for the texts this phone has no copy of.
 function storageKey(field, slot) {
   return field + slot;
 }
@@ -161,12 +163,27 @@ function watchIdsFromPayload(payload) {
 
 // Reads the state the watch reports: the ids of all slots and, from a watch that has
 // appearance settings, those and its text size. Returns null for any other message.
+// Returns ``[{name, bytes}]`` for every slot, or null if the message has none.
+function watchSlotsFromPayload(payload) {
+  var slots = [];
+  for (var slot = 0; slot < SLOT_COUNT; slot++) {
+    var name = payload['SlotName' + slot];
+    var bytes = payload['SlotSize' + slot];
+    if (name === undefined || bytes === undefined) {
+      return null;
+    }
+    slots.push({name: name, bytes: bytes});
+  }
+  return slots;
+}
+
 function stateFromPayload(payload) {
   var ids = watchIdsFromPayload(payload);
   if (!ids) {
     return null;
   }
-  var state = {ids: ids, settings: null, textSize: null};
+  var state = {ids: ids, settings: null, textSize: null,
+    watchSlots: watchSlotsFromPayload(payload)};
   if (payload.SizeMask !== undefined) {
     state.settings = normalizeSettings({
       showTime: payload.ShowTime !== 0,
@@ -213,18 +230,30 @@ function queueAdd(queue, item, first) {
 
 // What the settings page shows for every slot. A slot that was cleared and whose
 // clearing reached the watch counts as empty again.
+function takeWatchSlots(storage, watchSlots) {
+  storage.setItem('watchSlots', JSON.stringify(watchSlots));
+}
+
+// A slot never saved on this phone is 'watch' if the watch reported a text in it: the
+// page shows its name from the watch as ``watchName``.
 function pageSlots(storage) {
+  var watchSlots = JSON.parse(storage.getItem('watchSlots') || 'null') || [];
   var slots = [];
   for (var slot = 0; slot < SLOT_COUNT; slot++) {
     var saved = storage.getItem(storageKey('text', slot)) || '';
     var syncState = storage.getItem(storageKey('syncState', slot)) || 'pending';
-    var empty = storage.getItem(storageKey('textId', slot)) === null ||
-      (syncState === 'synced' && !text.normalizeText(saved));
-    slots.push({
+    var neverSaved = storage.getItem(storageKey('textId', slot)) === null;
+    var empty = neverSaved || (syncState === 'synced' && !text.normalizeText(saved));
+    var onWatch = neverSaved && watchSlots[slot] && watchSlots[slot].bytes > 0;
+    var pageSlot = {
       text: saved,
       name: storage.getItem(storageKey('name', slot)) || '',
-      state: empty ? 'empty' : syncState
-    });
+      state: onWatch ? 'watch' : empty ? 'empty' : syncState
+    };
+    if (onWatch) {
+      pageSlot.watchName = watchSlots[slot].name;
+    }
+    slots.push(pageSlot);
   }
   return slots;
 }
@@ -276,6 +305,7 @@ module.exports = {
   pageSettings: pageSettings,
   takeWatchSettings: takeWatchSettings,
   stateFromPayload: stateFromPayload,
+  takeWatchSlots: takeWatchSlots,
   storageKey: storageKey,
   migrateStorage: migrateStorage,
   localIds: localIds,

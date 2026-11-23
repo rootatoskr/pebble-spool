@@ -77,14 +77,15 @@ test('stateFromPayload reads ids, settings and text size', function() {
   assert.deepStrictEqual(sync.stateFromPayload(payload), {
     ids: [1, 0, 3, 0, 5],
     settings: {showTime: false, sizes: [14, 24], menuSize: 20, invert: true, scrollMode: 'smooth'},
-    textSize: 24
+    textSize: 24,
+    watchSlots: null
   });
 });
 
 test('stateFromPayload accepts a state without settings and rejects other messages', function() {
   var payload = {SlotId0: 1, SlotId1: 2, SlotId2: 3, SlotId3: 4, SlotId4: 5};
   assert.deepStrictEqual(sync.stateFromPayload(payload),
-    {ids: [1, 2, 3, 4, 5], settings: null, textSize: null});
+    {ids: [1, 2, 3, 4, 5], settings: null, textSize: null, watchSlots: null});
   assert.strictEqual(sync.stateFromPayload({ResultId: 1, ResultOk: 1}), null);
 });
 

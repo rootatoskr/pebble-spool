@@ -136,6 +136,9 @@ function saveSettings(settings) {
 // The watch reported its state. Send our texts again where it has a different version:
 // this restores them after a broken transfer or a reinstall. The same for settings.
 function handleWatchState(state) {
+  if (state.watchSlots) {
+    sync.takeWatchSlots(localStorage, state.watchSlots);
+  }
   var phoneIds = sync.localIds(localStorage);
   var resend = sync.slotsToResend(phoneIds, state.ids);
   for (var slot = 0; slot < sync.SLOT_COUNT; slot++) {

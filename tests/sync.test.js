@@ -134,6 +134,41 @@ test('pageSlots shows slots never saved on this phone as empty', function() {
   });
 });
 
+test('pageSlots shows a text that is only on the watch with its name from the watch', function() {
+  var storage = fakeStorage({
+    // Saved on this phone: its own copy wins, even an emptied one.
+    text0: 'Перший', name0: '', textId0: '1', syncState0: 'synced',
+    text1: '', name1: '', textId1: '2', syncState1: 'synced'
+  });
+  sync.takeWatchSlots(storage, [
+    {name: 'Інша', bytes: 10}, {name: 'Стара', bytes: 20}, {name: 'Нотатки', bytes: 30},
+    {name: 'Порожній', bytes: 0}, {name: '', bytes: 0}
+  ]);
+  assert.deepStrictEqual(sync.pageSlots(storage), [
+    {text: 'Перший', name: '', state: 'synced'},
+    {text: '', name: '', state: 'empty'},
+    {text: '', name: '', state: 'watch', watchName: 'Нотатки'},
+    {text: '', name: '', state: 'empty'},
+    {text: '', name: '', state: 'empty'}
+  ]);
+});
+
+test('stateFromPayload reads the names and sizes of the texts on the watch', function() {
+  var payload = {SlotId0: 1, SlotId1: 0, SlotId2: 0, SlotId3: 0, SlotId4: 0};
+  assert.strictEqual(sync.stateFromPayload(payload).watchSlots, null);
+  for (var slot = 0; slot < sync.SLOT_COUNT; slot++) {
+    payload['SlotName' + slot] = slot === 0 ? 'Назва' : '';
+    payload['SlotSize' + slot] = slot === 0 ? 1234 : 0;
+  }
+  var watchSlots = sync.stateFromPayload(payload).watchSlots;
+  assert.deepStrictEqual(watchSlots[0], {name: 'Назва', bytes: 1234});
+  assert.deepStrictEqual(watchSlots[4], {name: '', bytes: 0});
+  var declared = require('../package.json').pebble.messageKeys;
+  Object.keys(payload).forEach(function(key) {
+    assert.ok(declared.indexOf(key) >= 0, key);
+  });
+});
+
 test('selectedSlot opens the slot saved last, 0 by default', function() {
   assert.strictEqual(sync.selectedSlot(fakeStorage({})), 0);
   assert.strictEqual(sync.selectedSlot(fakeStorage({lastSlot: '3'})), 3);
