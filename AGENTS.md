@@ -4,195 +4,195 @@ alwaysApply: true
 
 # pebble-spool
 
-Spool – застосунок (watchapp) для Pebble Time 2 (emery), який показує на годиннику тексти, вставлені на телефоні. Написаний на C з Pebble SDK, частина на телефоні – PebbleKit JS. Поточна версія – 1.5.2, історія змін – у `CHANGELOG.md`.
+Spool is a watchapp for Pebble Time 2 (emery) that shows texts pasted on the phone. It is written in C with the Pebble SDK; the phone side is PebbleKit JS. Current version – 1.5.2, change history – in `CHANGELOG.md`.
 
-Магазин: https://apps.repebble.com/14817aa6769140bda8a8f80d
+Store: https://apps.repebble.com/14817aa6769140bda8a8f80d
 
-Спілкуйся з користувачем українською. Коментарі в коді, назви змінних і повідомлення комітів – англійською.
+Talk to the user in Ukrainian. Code comments, variable names and commit messages are in English.
 
-## Мета і межі
+## Purpose and boundaries
 
-Показати конкретний текст з телефона на годиннику. Нічого більше.
+Show a specific text from the phone on the watch. Nothing more.
 
-Не робити ніколи:
-- редагування тексту на годиннику;
-- хмару, акаунти, синхронізацію з сервісами;
-- голосове введення.
+Never do:
+- text editing on the watch;
+- cloud, accounts, syncing with services;
+- voice input.
 
-Автопрокручування, Timeline, App Glance, дотик – лише за окремим запитом.
+Auto-scroll, Timeline, App Glance, touch – only on separate request.
 
-## Можливості
+## Features
 
-- До 5 текстів, кожен до 8000 байт UTF-8, з назвою до 32 байт. Без введеної назви назвою стає перший рядок тексту.
-- Сторінка налаштувань на телефоні: вкладки 1–5, поле назви, текст, лічильник байтів з попередженням про перевищення, блок «Appearance». «Save» надсилає лише те, що змінилось: вибраний текст, налаштування або обидва. «Clear» і збереження порожнього тексту питають підтвердження. Вкладка тексту, якого немає на телефоні, показує назву з годинника і «Is on the watch, no copy on this phone»; збереження нового тексту туди питає підтвердження.
-- Годинник: меню з назвами текстів; Select відкриває текст, Back повертає в меню. Меню запам'ятовує вибраний пункт; у пам'ять завантажується лише відкритий текст.
-- У тексті: Up/Down прокручують по екрану (висота екрана мінус один рядок, цілими рядками, верхній рядок завжди цілий) або плавно; утримання повторює крок. Утримання Select перемикає розмір серед увімкнених (14, 18, 20, 24). Коротке Select закриває застосунок і повертає на циферблат; 700 мс після появи вікна тексту воно ігнорується. Індикатор прогресу – смужка 3 px справа, прихована, якщо текст вміщується.
-- Налаштування вигляду: показувати час (StatusBarLayer), які розміри бере утримання Select, розмір назв у меню, інвертовані кольори, прокручування по екрану чи плавно. Застосовуються одразу у відкритому меню чи тексті.
-- Відновлення: місце читання запам'ятовується для кожного тексту; новий текст починається з початку. При запуску відкривається текст, який був відкритий при виході, поверх меню; лише Back у меню веде до запуску з меню.
-- Службові повідомлення на годиннику – англійською: «Paste text in settings on your phone», «Last transfer incomplete. Save again.», «Transfer incomplete» у меню, «Text too long to show in full. Shorten it in settings.», «Text damaged. It will be sent again from the phone.».
-- Копії текстів зберігаються в localStorage телефона; тексти, яких бракує на годиннику, телефон надсилає знову сам.
+- Up to 5 texts, each up to 8000 bytes of UTF-8, with a name up to 32 bytes. Without an entered name, the first line of the text becomes the name.
+- Settings page on the phone: tabs 1–5, name field, text, byte counter with an overflow warning, "Appearance" block. "Save" sends only what changed: the selected text, the settings, or both. "Clear" and saving an empty text ask for confirmation. The tab of a text that is not on the phone shows the name from the watch and "Is on the watch, no copy on this phone"; saving a new text there asks for confirmation.
+- Watch: a menu with text names; Select opens a text, Back returns to the menu. The menu remembers the selected item; only the open text is loaded into memory.
+- In a text: Up/Down scroll by screen (screen height minus one line, in whole lines, the top line is always whole) or smoothly; holding repeats the step. Holding Select switches the size among the enabled ones (14, 18, 20, 24). A short Select closes the app and returns to the watchface; it is ignored for 700 ms after the text window appears. The progress indicator is a 3 px bar on the right, hidden if the text fits.
+- Appearance settings: show time (StatusBarLayer), which sizes holding Select cycles through, menu title size, inverted colors, scrolling by screen or smoothly. They apply immediately in an open menu or text.
+- Restore: the reading position is remembered for each text; a new text starts from the beginning. On launch, the text that was open at exit is opened on top of the menu; only Back in the menu leads to launching with the menu.
+- Service messages on the watch are in English: "Paste text in settings on your phone", "Last transfer incomplete. Save again.", "Transfer incomplete" in the menu, "Text too long to show in full. Shorten it in settings.", "Text damaged. It will be sent again from the phone.".
+- Copies of the texts are stored in the phone's localStorage; texts missing on the watch are sent again by the phone on its own.
 
-## Архітектура
+## Architecture
 
-### Годинник (`src/c/`)
+### Watch (`src/c/`)
 
-- `pebble-spool.c` – вхідна точка: ініціалізація сховища, меню і відновлення відкритого тексту, AppMessage.
-- `menu_window.c` – меню текстів (DejaVu, бо системний шрифт меню не має українських літер), власні кнопки, щоб перехопити Back.
-- `text_window.c` – вікно тексту: шрифти, прокручування, вирівнювання на рядок, індикатор, позначки, захист Select 700 мс, місце читання.
-- `settings.c` – налаштування вигляду і розміри тексту.
-- `storage.c` – тексти, налаштування й позиції в persistent storage, міграції.
-- `transfer.c` – приймання текстів і налаштувань, повідомлення стану.
+- `pebble-spool.c` – entry point: storage initialization, menu and restoring the open text, AppMessage.
+- `menu_window.c` – text menu (DejaVu, because the system menu font has no Ukrainian letters), custom buttons to intercept Back.
+- `text_window.c` – text window: fonts, scrolling, snapping to a line, indicator, marks, 700 ms Select guard, reading position.
+- `settings.c` – appearance settings and text sizes.
+- `storage.c` – texts, settings and positions in persistent storage, migrations.
+- `transfer.c` – receiving texts and settings, status messages.
 
-### Телефон (`src/pkjs/`)
+### Phone (`src/pkjs/`)
 
-- `index.js` – події PebbleKit JS, черга передач, повтори й таймаути, копії в localStorage.
-- `sync.js` – що й у якому порядку надсилати, побудова повідомлень, розбір стану, налаштування, міграція localStorage, `newTextId`.
-- `text.js` – нормалізація тексту, назви, довжина UTF-8, розрізання на шматки.
-- `config_page.js` – сторінка налаштувань (data URI) і розбір її відповіді.
+- `index.js` – PebbleKit JS events, transfer queue, retries and timeouts, copies in localStorage.
+- `sync.js` – what to send and in which order, message building, state parsing, settings, localStorage migration, `newTextId`.
+- `text.js` – text normalization, names, UTF-8 length, splitting into chunks.
+- `config_page.js` – settings page (data URI) and parsing of its response.
 
-Сторінка відкривається як data URI і повертає результат у `pebblejs://close#` як url-safe base64 від JSON `{slot, name?, text?, settings?}`; `text` і `settings` є лише якщо змінились.
+The page opens as a data URI and returns the result to `pebblejs://close#` as url-safe base64 of the JSON `{slot, name?, text?, settings?}`; `text` and `settings` are present only if they changed.
 
-### Протокол AppMessage
+### AppMessage protocol
 
-Ключі (`package.json`, `messageKeys`): `Hello`, `SlotId0`–`SlotId4`, `SlotName0`–`SlotName4`, `SlotSize0`–`SlotSize4`, `ShowTime`, `SizeMask`, `MenuSize`, `Invert`, `ScrollMode`, `TextSize`, `TransferId`, `Slot`, `Name`, `ChunkIndex`, `ChunkCount`, `TotalBytes`, `ChunkData`, `ResultId`, `ResultOk`.
+Keys (`package.json`, `messageKeys`): `Hello`, `SlotId0`–`SlotId4`, `SlotName0`–`SlotName4`, `SlotSize0`–`SlotSize4`, `ShowTime`, `SizeMask`, `MenuSize`, `Invert`, `ScrollMode`, `TextSize`, `TransferId`, `Slot`, `Name`, `ChunkIndex`, `ChunkCount`, `TotalBytes`, `ChunkData`, `ResultId`, `ResultOk`.
 
-- Телефон → годинник:
-  - `Hello` – просить стан. Телефон надсилає його при запуску і коли не дочекався результату.
-  - Налаштування: `ShowTime`, `SizeMask` (біт `i` – розмір `SIZES[i]`), `MenuSize`, `Invert`, `ScrollMode`.
-  - Шматок тексту: `TransferId`, `Slot`, `ChunkIndex`, `ChunkCount`, `TotalBytes`, `ChunkData`; у першому шматку ще `Name`. Шматок – до 1000 байт, UTF-8 не розрізається. Порожній текст – один порожній шматок, він очищає слот. Перший шматок завжди починає передачу наново.
-- Годинник → телефон:
-  - Стан: для кожного слота `SlotId`, `SlotName`, `SlotSize`, а також `ShowTime`, `SizeMask`, `MenuSize`, `Invert`, `ScrollMode`, `TextSize`. Надсилається у відповідь на `Hello`, після нових налаштувань і після зміни розміру; пропускається, поки приймається текст або вихідний буфер зайнятий. Пошкоджений текст повідомляється з id 0.
-  - Результат: `ResultId`, `ResultOk` після останнього шматка.
-- Телефон: одна передача за раз, налаштування завжди першими. «Save» ставить слот на початок черги, перервана передача стає в чергу знову. Кожне повідомлення – до 3 спроб з паузою 1 с. Після останнього шматка телефон чекає результат 10 с; якщо його немає – `Hello` і 10 с на стан, до 3 спроб, потім текст позначається як не доставлений. За станом телефон позначає тексти доставленими або ставить у чергу ті, чиї id відрізняються від його копій.
-- Id передачі – випадкове додатне 31-бітне число (`sync.newTextId`), ніколи не 0: 0 означає «нічого не збережено» і «пошкоджено».
-- localStorage телефона: `text<n>`, `name<n>`, `textId<n>`, `syncState<n>` (`pending`, `synced`, `failed`), `lastSlot`, `settings`, `settingsState`, `watchSettings`, `textSize`, `watchSlots`. Ключі версії 1.1 без номера (`text`, `textId`, `syncState`) мігрують у слот 0. Зламаний JSON читається як відсутні дані.
+- Phone → watch:
+  - `Hello` – asks for the state. The phone sends it at launch and when it did not get a result in time.
+  - Settings: `ShowTime`, `SizeMask` (bit `i` – size `SIZES[i]`), `MenuSize`, `Invert`, `ScrollMode`.
+  - Text chunk: `TransferId`, `Slot`, `ChunkIndex`, `ChunkCount`, `TotalBytes`, `ChunkData`; the first chunk also has `Name`. A chunk is up to 1000 bytes, UTF-8 is not split. An empty text is one empty chunk, it clears the slot. The first chunk always restarts the transfer.
+- Watch → phone:
+  - State: for each slot `SlotId`, `SlotName`, `SlotSize`, and also `ShowTime`, `SizeMask`, `MenuSize`, `Invert`, `ScrollMode`, `TextSize`. Sent in response to `Hello`, after new settings and after a size change; skipped while a text is being received or the outbox is busy. A damaged text is reported with id 0.
+  - Result: `ResultId`, `ResultOk` after the last chunk.
+- Phone: one transfer at a time, settings always first. "Save" puts the slot at the front of the queue, an interrupted transfer is queued again. Each message gets up to 3 attempts with a 1 s pause. After the last chunk the phone waits 10 s for the result; if there is none – `Hello` and 10 s for the state, up to 3 attempts, then the text is marked as not delivered. Based on the state, the phone marks texts as delivered or queues those whose ids differ from its copies.
+- Transfer id is a random positive 31-bit number (`sync.newTextId`), never 0: 0 means "nothing saved" and "damaged".
+- Phone localStorage: `text<n>`, `name<n>`, `textId<n>`, `syncState<n>` (`pending`, `synced`, `failed`), `lastSlot`, `settings`, `settingsState`, `watchSettings`, `textSize`, `watchSlots`. Version 1.1 keys without a number (`text`, `textId`, `syncState`) migrate to slot 0. Broken JSON is read as missing data.
 
-### Сховище на годиннику
+### Storage on the watch
 
-Номер схеми – 3, ключ 1.
+Schema number – 3, key 1.
 
-- Текст `t` (0–4) має дві сторони `s` (1, 2). Заголовок сторони (id передачі, розмір, кількість шматків, стан, назва) – під ключем `1000 * (2t + s)`, шматки до 255 байт – під наступними ключами, UTF-8 не розрізається.
-- Активна сторона – ключ `10 + t`. Нова версія пишеться в неактивну сторону; запис номера активної сторони – це перемикання, після нього стара сторона видаляється. Обірвана передача не чіпає збережену версію й інші тексти.
-- Місце читання – ключ `20 + t`: id передачі, зсув і висота вмісту, до якої він належить.
-- `30` – вибраний у меню текст, `31` – розмір тексту в пікселях, `32` – налаштування (запис будь-якої довжини від 3 байтів, відсутні поля – 0, тобто за замовчуванням), `33` – відкритий текст.
-- Текст вважається пошкодженим, якщо шматків немає або їхні розміри не дають `total_bytes`; перевірка не читає сам текст.
-- Міграції: схема 1 (один текст; ключі 3 і 4) – у текст 0 з першим рядком як назвою; схема ≤ 2 зберігала шрифт індексом під ключем 2 – стає пікселями (18 → 18, 24 і 32 → 24, не збережений → 24); нова установка починає з 20. Старі ключі видаляються лише після запису нових і номера схеми; перервана міграція завершується при наступному запуску.
+- Text `t` (0–4) has two sides `s` (1, 2). The side header (transfer id, size, chunk count, state, name) is under key `1000 * (2t + s)`, chunks of up to 255 bytes are under the following keys, UTF-8 is not split.
+- The active side is key `10 + t`. A new version is written to the inactive side; writing the active side number is the switch, after it the old side is deleted. An interrupted transfer does not touch the saved version or other texts.
+- Reading position – key `20 + t`: transfer id, offset and the content height it belongs to.
+- `30` – text selected in the menu, `31` – text size in pixels, `32` – settings (a record of any length from 3 bytes, missing fields are 0, i.e. default), `33` – open text.
+- A text is considered damaged if there are no chunks or their sizes do not add up to `total_bytes`; the check does not read the text itself.
+- Migrations: schema 1 (one text; keys 3 and 4) – into text 0 with the first line as the name; schema ≤ 2 stored the font as an index under key 2 – it becomes pixels (18 → 18, 24 and 32 → 24, not stored → 24); a fresh install starts with 20. Old keys are deleted only after the new ones and the schema number are written; an interrupted migration completes on the next launch.
 
-## Технічні обмеження і перевірені факти
+## Technical limits and verified facts
 
-- Ліміти: текст – 8000 байт UTF-8 після нормалізації, назва – 32 байти. Висота шару тексту – до 30 000 px (координати шарів 16-бітні); вищий текст обрізається на межі рядка з позначкою.
-- Одне значення persist – не більше 256 байт (`PERSIST_DATA_MAX_LENGTH`).
-- Шрифт – DejaVu Sans у `resources/`, чотири ресурси (14, 18, 20, 24) з `"extended": true` (без нього генератор зупиняється на 256 гліфах) і `characterRegex` `[ -~ -¬®-ÿЀ-џҐґ‐-‧‰-›€№−]`. `normalizeText` пропускає рівно ці символи, решту замінює на «?»; тест це перевіряє. Системні шрифти показують ґ, є, і, ї як квадрати, тому для тексту – лише власний шрифт. Після зміни шрифтів чи `characterRegex` – `pebble clean`. Рекомендований максимальний розмір шрифту – 48.
-- AppMessage: вхідний буфер розрахований на шматок (~1100 байт), найбільше вихідне повідомлення – стан, до 349 байт. `app_message_outbox_size_maximum()` і `app_message_inbox_size_maximum()` на emery в емуляторі – 8200; на годиннику не перевірено.
-- Сторінка налаштувань як data URI: URL відкриття – до ~77 КБ з 5 повними текстами й довгими назвами, URL повернення – до ~11 КБ. Сторінка лише англійською.
-- Збірка пише, що в `package.json` немає `usesPermissions`; так і має бути: мережі й геолокації застосунок не використовує.
-- Чиста збірка (`pebble clean`) змінює мітку часу ресурсів у `.pbw`, тож `.pbw` з того самого коду побайтово відрізняється.
-- Телефон – Samsung S26 з Android. Застосунок Pebble на Android виконує PebbleKit JS у прихованому WebView. До версії 1.3 телефоном був iPhone, де PebbleKit JS працює в JavaScriptCore без `fetch` і DOM; код на телефоні цим не користується й досі. На iPhone перевірено лише ранні версії: на кроці 0 близько 3000 символів кирилицею дійшли повністю. Перед зміною коду на телефоні прочитай гайд про PebbleKit JS у мобільному застосунку Pebble (знайди його в https://developer.repebble.com/llms.txt).
-- Перевірено на Samsung S26: сторінка налаштувань як data URI відкривається в застосунку Pebble, збереження й редагування текстів працюють. Не перевірено на Android: сторінка з 5 повними текстами і темна тема.
-- Емулятор не перевіряє сторінку в застосунку Pebble: `pebble emu-app-config` відкриває її у браузері комп'ютера.
+- Limits: text – 8000 bytes of UTF-8 after normalization, name – 32 bytes. Text layer height – up to 30 000 px (layer coordinates are 16-bit); a taller text is cut at a line boundary with a mark.
+- One persist value – at most 256 bytes (`PERSIST_DATA_MAX_LENGTH`).
+- Font – DejaVu Sans in `resources/`, four resources (14, 18, 20, 24) with `"extended": true` (without it the generator stops at 256 glyphs) and `characterRegex` `[ -~ -¬®-ÿЀ-џҐґ‐-‧‰-›€№−]`. `normalizeText` passes exactly these characters and replaces the rest with "?"; a test checks this. System fonts show ґ, є, і, ї as squares, so only the custom font is used for text. After changing fonts or `characterRegex` – `pebble clean`. The recommended maximum font size is 48.
+- AppMessage: the inbox buffer is sized for a chunk (~1100 bytes), the largest outgoing message is the state, up to 349 bytes. `app_message_outbox_size_maximum()` and `app_message_inbox_size_maximum()` on emery in the emulator are 8200; not checked on the watch.
+- Settings page as a data URI: the opening URL is up to ~77 KB with 5 full texts and long names, the return URL is up to ~11 KB. The page is English only.
+- The build says `usesPermissions` is missing in `package.json`; that is correct: the app uses neither network nor geolocation.
+- A clean build (`pebble clean`) changes the resource timestamp in the `.pbw`, so a `.pbw` from the same code differs byte for byte.
+- The phone is a Samsung S26 with Android. The Pebble app on Android runs PebbleKit JS in a hidden WebView. Before version 1.3 the phone was an iPhone, where PebbleKit JS runs in JavaScriptCore without `fetch` and DOM; the phone code still does not use them. On iPhone only early versions were checked: at step 0 about 3000 Cyrillic characters arrived in full. Before changing the phone code, read the guide about PebbleKit JS in the Pebble mobile app (find it in https://developer.repebble.com/llms.txt).
+- Verified on Samsung S26: the settings page as a data URI opens in the Pebble app, saving and editing texts work. Not verified on Android: a page with 5 full texts and the dark theme.
+- The emulator does not check the page in the Pebble app: `pebble emu-app-config` opens it in the computer's browser.
 
-## Платформа і конфігурація
+## Platform and configuration
 
-- Цільова платформа лише `emery` (Pebble Time 2). У `package.json` в `pebble.targetPlatforms` має бути тільки `emery`.
-- Це застосунок, а не циферблат: `pebble.watchapp.watchface` має бути `false`.
-- Застосунок налаштовуваний: у `pebble.capabilities` має бути `configurable`.
-- `pebble.displayName` – `Spool`: так застосунок називається на годиннику, на сторінці налаштувань і в магазині. Поле `name` на верхньому рівні – `pebble-spool`, як репозиторій.
-- Іконка в лаунчері – `resources/icon.png` (25×25, `"menuIcon": true`).
+- The only target platform is `emery` (Pebble Time 2). `pebble.targetPlatforms` in `package.json` must contain only `emery`.
+- This is an app, not a watchface: `pebble.watchapp.watchface` must be `false`.
+- The app is configurable: `pebble.capabilities` must contain `configurable`.
+- `pebble.displayName` – `Spool`: this is how the app is named on the watch, on the settings page and in the store. The top-level `name` field is `pebble-spool`, like the repository.
+- Launcher icon – `resources/icon.png` (25×25, `"menuIcon": true`).
 
-## Структура проекту
+## Project structure
 
 ```
-src/c/        - код застосунку на годиннику (C)
-src/pkjs/     - код на телефоні (PebbleKit JS)
-resources/    - шрифти й іконка в лаунчері
-tests/        - тести коду на телефоні (Node.js)
-package.json  - метадані, платформи, ключі AppMessage, ресурси
-CHANGELOG.md  - історія версій
-screenshots/  - .pbw і матеріали магазину, не в репозиторії
+src/c/ - watch app code (C)
+src/pkjs/ - phone code (PebbleKit JS)
+resources/ - fonts and launcher icon
+tests/ - phone code tests (Node.js)
+package.json - metadata, platforms, AppMessage keys, resources
+CHANGELOG.md - version history
+screenshots/ - .pbw and store materials, not in the repository
 ```
 
-## Команди
+## Commands
 
 ```bash
-pebble build                                        # зібрати
-pebble clean                                        # очистити збірку
-pebble install --emulator emery                     # встановити в емулятор Time 2
-pebble emu-app-config --emulator emery              # відкрити сторінку налаштувань застосунку в браузері
+pebble build  # build
+pebble clean  # clean the build
+pebble install --emulator emery  # install into the Time 2 emulator
+pebble emu-app-config --emulator emery  # open the app settings page in the browser
 pebble screenshot --scale 6 --no-open screenshot.png
-pebble emu-button click select                      # натиснути кнопку
-pebble logs --emulator emery                        # логи APP_LOG, до Ctrl-C
-node --test tests/                                  # тести коду на телефоні
+pebble emu-button click select  # press a button
+pebble logs --emulator emery  # APP_LOG logs, until Ctrl-C
+node --test tests/  # phone code tests
 ```
 
-Для довідки по будь-якій команді додай `--help`.
+For help on any command add `--help`.
 
-## Перевірка після кожної зміни
+## Verification after every change
 
-Не зупиняйся на успішній збірці.
+Do not stop at a successful build.
 
-1. `pebble build` і `node --test tests/`
-2. `pebble install --emulator emery --logs` – дочекайся запуску застосунку, перевір логи, зупини Ctrl-C.
-3. `pebble emu-app-config --emulator emery` – встав тестовий текст, збережи.
-4. `pebble screenshot --scale 6 --no-open screenshot.png` – подивись на скриншот.
-5. Перевір прокручування: `pebble emu-button click down --repeat 5`, потім знову скриншот.
-6. Перевір розмір шрифту: `pebble emu-button click select --duration 1000`, потім скриншот.
-7. Перевір збереження: закрий застосунок (`pebble emu-button click back --duration 2000`), відкрий знову – текст і шрифт мають лишитися.
+1. `pebble build` and `node --test tests/`
+2. `pebble install --emulator emery --logs` – wait for the app to start, check the logs, stop with Ctrl-C.
+3. `pebble emu-app-config --emulator emery` – paste a test text, save.
+4. `pebble screenshot --scale 6 --no-open screenshot.png` – look at the screenshot.
+5. Check scrolling: `pebble emu-button click down --repeat 5`, then another screenshot.
+6. Check the font size: `pebble emu-button click select --duration 1000`, then a screenshot.
+7. Check persistence: close the app (`pebble emu-button click back --duration 2000`), open it again – the text and font must stay.
 
-Тестові тексти:
-- короткий англійський рядок;
-- український текст з "ґ є і ї" – літери мають відображатися, а не квадрати;
-- довгий український текст на кілька екранів – перевірка розрізання UTF-8 і швидкості прокручування;
-- текст, довший за допустимий ліміт, – має з'явитися попередження в налаштуваннях.
+Test texts:
+- a short English line;
+- Ukrainian text with "ґ є і ї" – the letters must render, not squares;
+- a long Ukrainian text of several screens – checks UTF-8 splitting and scroll speed;
+- a text longer than the allowed limit – a warning must appear in settings.
 
-Після перевірки спитай себе, чи скриншот відповідає задачі, і виправ розбіжності.
+After verification, ask yourself whether the screenshot matches the task, and fix discrepancies.
 
-Тимчасові правки для імітації збоїв чи вимірювань позначай `HACK` у кожному рядку і прибирай після перевірки: `grep -c HACK` по коду має дати 0, а `git status` – чистий.
+Mark temporary edits that simulate failures or take measurements with `HACK` on every line and remove them after verification: `grep -c HACK` over the code must give 0, and `git status` must be clean.
 
-## Керування емулятором
+## Emulator control
 
-- `click` – натиснути й відпустити, `--duration` для довгого натискання.
-- `push` / `release` – затиснути / відпустити.
-- `--repeat N` і `--interval мс` – повтор натискань.
-- Кнопки: `back`, `up`, `select`, `down`.
+- `click` – press and release, `--duration` for a long press.
+- `push` / `release` – hold / release.
+- `--repeat N` and `--interval ms` – repeat presses.
+- Buttons: `back`, `up`, `select`, `down`.
 
-Якщо емулятор поводиться дивно (скриншот іншого застосунку, встановлення зависає): `pebble kill`, потім `pebble wipe`, потім встанови знову.
+If the emulator behaves strangely (a screenshot of another app, installation hangs): `pebble kill`, then `pebble wipe`, then install again.
 
-## Встановлення на годинник
+## Installing on the watch
 
-Лише коли користувач попросить:
+Only when the user asks:
 
 ```bash
 pebble install --cloudpebble
 ```
 
-Не тримай відкритими `pebble logs` чи `--logs` на справжньому годиннику довше, ніж потрібно: потік логів тримає Bluetooth активним і розряджає годинник і телефон.
+Do not keep `pebble logs` or `--logs` open on a real watch longer than needed: the log stream keeps Bluetooth active and drains the watch and the phone.
 
-## Реліз
+## Release
 
-- Версія – у `package.json` (`version`), разом з розділом у `CHANGELOG.md`.
-- Тег `vX.Y.Z` (анотований, «Version X.Y.Z») ставиться на коміт, з якого зібрано `.pbw`.
-- `.pbw` (`screenshots/spool-X.Y.Z.pbw`) і матеріали магазину (скриншоти, опис, release notes, іконки, банер) лежать у `screenshots/`, який у `.gitignore`.
-- Публікує користувач вручну через Developer Dashboard (New Release). Видимість застосунку в магазині змінює лише користувач.
+- The version is in `package.json` (`version`), together with a section in `CHANGELOG.md`.
+- The tag `vX.Y.Z` (annotated, "Version X.Y.Z") is placed on the commit the `.pbw` was built from.
+- The `.pbw` (`screenshots/spool-X.Y.Z.pbw`) and store materials (screenshots, description, release notes, icons, banner) are in `screenshots/`, which is in `.gitignore`.
+- The user publishes manually through the Developer Dashboard (New Release). Only the user changes the app's visibility in the store.
 
 ## Git
 
-- Після кожного робочого кроку, перевіреного в емуляторі, роби коміт з коротким описом англійською. Нічого не комітити, якщо збірка падає.
-- У повідомленнях комітів, коментарях і файлах проекту не додавай підписів, трейлерів чи згадок про AI-асистентів.
-- Автор і комітер – no-reply адреса GitHub: `rootatoskr <129084982+rootatoskr@users.noreply.github.com>`.
-- Пуш – лише за командою користувача і ніколи з force.
+- After every working step verified in the emulator, make a commit with a short description in English. Commit nothing if the build fails.
+- Do not add signatures, trailers or mentions of AI assistants in commit messages, comments and project files.
+- Author and committer are the GitHub no-reply address: `rootatoskr <129084982+rootatoskr@users.noreply.github.com>`.
+- Push only on the user's command and never with force.
 
-## Документація
+## Documentation
 
-- Індекс усіх сторінок: https://developer.repebble.com/llms.txt
-- У будь-якої сторінки є Markdown-версія: заміни кінцевий `/` на `.md`. Читай саме `.md`-версію перед використанням API.
-- Перед використанням функції перевір її в довіднику, а не з пам'яті.
+- Index of all pages: https://developer.repebble.com/llms.txt
+- Every page has a Markdown version: replace the trailing `/` with `.md`. Read the `.md` version before using an API.
+- Before using a function, check it in the reference, not from memory.
 
-Корисні розділи:
+Useful sections:
 - Persistent Storage: https://developer.repebble.com/guides/events-and-services/persistent-storage.md
 - App Configuration (manual setup): https://developer.repebble.com/guides/user-interfaces/app-configuration-static.md
 - Fonts: https://developer.repebble.com/guides/app-resources/fonts.md
 - PebbleKit JS: https://developer.repebble.com/guides/communication/using-pebblekit-js.md
 - AppMessage: https://developer.repebble.com/docs/c/Foundation/AppMessage.md
-- Кнопки: https://developer.repebble.com/guides/events-and-services/buttons.md
-- Шари інтерфейсу: https://developer.repebble.com/guides/user-interfaces/layers.md
+- Buttons: https://developer.repebble.com/guides/events-and-services/buttons.md
+- UI layers: https://developer.repebble.com/guides/user-interfaces/layers.md
 - App Metadata: https://developer.repebble.com/guides/tools-and-resources/app-metadata.md
